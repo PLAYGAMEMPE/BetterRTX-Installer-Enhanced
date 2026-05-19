@@ -1,7 +1,7 @@
 @echo off
 rem ============================================================
 rem  BetterRTX Easy Installer - Setup del entorno de desarrollo
-rem  Detecta e instala: Rust (+MSVC), Bun, WebView2 Runtime.
+rem  Detecta e instala: Rust (+MSVC), Bun/Node, WebView2 Runtime.
 rem  Compatible con Windows 10 (1809+) y Windows 11.
 rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
@@ -73,7 +73,7 @@ if "!HAS_MSVC!"=="1" (
   )
 )
 
-rem ---- Bun (runtime y gestor de paquetes del frontend) --------
+rem ---- Bun (gestor preferido) ----------------------------------
 set "BUN_BIN=%USERPROFILE%\.bun\bin"
 where bun >nul 2>&1
 if not errorlevel 1 (
@@ -88,7 +88,13 @@ if not errorlevel 1 (
     call :ok "Bun instalado correctamente."
     set "RESTART_NEEDED=1"
   ) else (
-    call :err "No se pudo instalar Bun. Instalalo manualmente desde https://bun.sh"
+    call :info "No se pudo instalar Bun. Verificando si npm esta disponible como alternativa..."
+    where npm >nul 2>&1
+    if not errorlevel 1 (
+      call :ok "npm detectado y sera usado como alternativa a Bun."
+    ) else (
+      call :err "Ni Bun ni npm encontrados. Instala Node.js LTS desde https://nodejs.org"
+    )
   )
 )
 
@@ -97,11 +103,17 @@ call :info "Verificando WebView2 Runtime..."
 winget install --id Microsoft.EdgeWebView2Runtime -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
 call :ok "WebView2 Runtime verificado (preinstalado en Windows 11)."
 
-rem ---- Dependencias del frontend (bun install) ----------------
+rem ---- Dependencias del frontend (bun install / npm install) --
 set "BUN_EXE="
 where bun >nul 2>&1
 if not errorlevel 1 set "BUN_EXE=bun"
 if not defined BUN_EXE if exist "%BUN_BIN%\bun.exe" set "BUN_EXE=%BUN_BIN%\bun.exe"
+
+set "NPM_EXE="
+if not defined BUN_EXE (
+  where npm >nul 2>&1
+  if not errorlevel 1 set "NPM_EXE=npm"
+)
 
 if defined BUN_EXE (
   if exist "%APP_DIR%\package.json" (
@@ -111,14 +123,28 @@ if defined BUN_EXE (
     if errorlevel 1 (
       call :err "Fallo 'bun install'. Revisa el log."
     ) else (
-      call :ok "Dependencias del frontend instaladas."
+      call :ok "Dependencias del frontend instaladas con Bun."
+    )
+    popd
+  ) else (
+    call :err "No se encontro %APP_DIR%\package.json"
+  )
+) else if defined NPM_EXE (
+  if exist "%APP_DIR%\package.json" (
+    call :info "Instalando dependencias del frontend con npm..."
+    pushd "%APP_DIR%"
+    "%NPM_EXE%" install >> "%LOG%" 2>&1
+    if errorlevel 1 (
+      call :err "Fallo 'npm install'. Revisa el log."
+    ) else (
+      call :ok "Dependencias del frontend instaladas con npm."
     )
     popd
   ) else (
     call :err "No se encontro %APP_DIR%\package.json"
   )
 ) else (
-  call :info "Bun aun no disponible en esta sesion; 'bun install' se ejecutara al reabrir."
+  call :info "Ningún gestor de paquetes disponible en esta sesion; las dependencias se instalaran al reabrir."
 )
 
 :summary

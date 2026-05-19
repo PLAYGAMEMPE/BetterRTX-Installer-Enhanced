@@ -2,6 +2,7 @@
 rem ============================================================
 rem  BetterRTX Easy Installer - Build portable (.exe)
 rem  Compila frontend + backend y genera el ejecutable portable.
+rem  Usa Bun si esta disponible; de lo contrario, npm.
 rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
 title BetterRTX Easy Installer - Build portable
@@ -23,39 +24,64 @@ echo   BetterRTX Easy Installer  -  Build portable
 echo ==================================================
 echo(
 
-rem ---- Validar entorno ----------------------------------------
+rem ---- Validar Rust/Cargo -------------------------------------
 set "CARGO_BIN=%USERPROFILE%\.cargo\bin"
-set "BUN_BIN=%USERPROFILE%\.bun\bin"
 if exist "%CARGO_BIN%\cargo.exe" set "PATH=%CARGO_BIN%;%PATH%"
-
 where cargo >nul 2>&1
 if errorlevel 1 (
   echo   [ERROR] Rust/Cargo no encontrado. Ejecuta primero: scripts\setup-env.bat
   endlocal & exit /b 1
 )
+
+rem ---- Detectar gestor de paquetes (Bun > npm) ---------------
+set "BUN_BIN=%USERPROFILE%\.bun\bin"
 set "BUN_EXE="
 where bun >nul 2>&1
 if not errorlevel 1 set "BUN_EXE=bun"
 if not defined BUN_EXE if exist "%BUN_BIN%\bun.exe" set "BUN_EXE=%BUN_BIN%\bun.exe"
+
+set "NPM_EXE="
 if not defined BUN_EXE (
-  echo   [ERROR] Bun no encontrado. Ejecuta primero: scripts\setup-env.bat
+  where npm >nul 2>&1
+  if not errorlevel 1 set "NPM_EXE=npm"
+)
+
+if not defined BUN_EXE if not defined NPM_EXE (
+  echo   [ERROR] Ni Bun ni npm fueron encontrados.
+  echo   [ERROR] Instala Node.js LTS desde https://nodejs.org o Bun desde https://bun.sh
   endlocal & exit /b 1
 )
-echo   [OK]    Rust y Bun detectados.
+
+if defined BUN_EXE (
+  echo   [OK]    Rust y Bun detectados.
+) else (
+  echo   [OK]    Rust y npm detectados ^(usando npm como alternativa a Bun^).
+)
 
 rem ---- Dependencias -------------------------------------------
 if not exist "%APP_DIR%\node_modules" (
   echo   [..]    Instalando dependencias del frontend...
   pushd "%APP_DIR%"
-  "%BUN_EXE%" install >> "%LOG%" 2>&1
-  if errorlevel 1 ( echo   [ERROR] Fallo 'bun install'. Revisa %LOG% & popd & endlocal & exit /b 1 )
+  if defined BUN_EXE (
+    "%BUN_EXE%" install >> "%LOG%" 2>&1
+  ) else (
+    "%NPM_EXE%" install >> "%LOG%" 2>&1
+  )
+  if errorlevel 1 (
+    echo   [ERROR] Fallo la instalacion de dependencias. Revisa %LOG%
+    popd & endlocal & exit /b 1
+  )
   popd
 )
 
 rem ---- Compilar -----------------------------------------------
 echo   [..]    Compilando aplicacion en modo release (esto puede tardar)...
 pushd "%APP_DIR%"
-"%BUN_EXE%" run tauri build >> "%LOG%" 2>&1
+if defined BUN_EXE (
+  "%BUN_EXE%" run tauri build >> "%LOG%" 2>&1
+) else (
+  "%NPM_EXE%" run tauri build >> "%LOG%" 2>&1
+)
 set "RC=%ERRORLEVEL%"
 popd
 if not "%RC%"=="0" (
