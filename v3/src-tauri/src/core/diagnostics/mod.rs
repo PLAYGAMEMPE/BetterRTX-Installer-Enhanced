@@ -1,6 +1,8 @@
 //! Panel de diagnostico: genera un informe completo del estado del sistema
 //! y de una instalacion concreta de Minecraft Bedrock.
 
+pub mod crash_analyzer;
+
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

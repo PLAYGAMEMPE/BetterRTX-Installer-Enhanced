@@ -9,9 +9,11 @@
 //! - [`permissions`]   sistema adaptativo de permisos por providers modulares.
 
 pub mod backup;
+pub mod benchmarks;
 pub mod compatibility;
 pub mod detection;
 pub mod diagnostics;
 pub mod installer;
 pub mod integrity;
+pub mod migration;
 pub mod permissions;

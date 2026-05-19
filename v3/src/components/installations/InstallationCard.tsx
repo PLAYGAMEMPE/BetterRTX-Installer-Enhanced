@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { cx } from "classix";
 import { useTranslation } from "react-i18next";
-import { Lock } from "lucide-react";
+import { Lock, AlertTriangle } from "lucide-react";
 import PresetIcon from "../presets/PresetIcon";
+import { checkMigrationNeeded } from "../../ipc/migration";
 
 export interface Installation {
   FriendlyName: string;
@@ -52,6 +53,14 @@ export const InstallationCard: React.FC<InstallationCardProps> = ({
   onSelectionChange,
 }) => {
   const { t } = useTranslation();
+  const [migrationNeeded, setMigrationNeeded] = useState(false);
+
+  useEffect(() => {
+    if (!installation.installed_preset) return;
+    checkMigrationNeeded(installation.InstallLocation)
+      .then((s) => setMigrationNeeded(s.migrationNeeded))
+      .catch(() => {});
+  }, [installation.InstallLocation, installation.installed_preset]);
 
   const handleCardClick = () => {
     const newSelected = !selected;
@@ -88,6 +97,15 @@ export const InstallationCard: React.FC<InstallationCardProps> = ({
           )}
           {installation.installed_preset?.is_api && (
             <span className="community-badge ml-2">{t("community_preset")}</span>
+          )}
+          {migrationNeeded && (
+            <span
+              className="ml-2 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+              title={t("migration_needed_tooltip", "Minecraft updated — reinstall preset for compatibility")}
+            >
+              <AlertTriangle className="w-3 h-3" />
+              {t("migration_needed", "Update")}
+            </span>
           )}
         </h3>
 

@@ -26,10 +26,22 @@ export interface DiagnosticsReport {
   notes: string[];
 }
 
+export interface CrashEvent {
+  timestamp: string;
+  eventId: string;
+  source: string;
+  message: string;
+  possiblyBrtxRelated: boolean;
+}
+
 export function checkCompatibility(installLocation: string): Promise<CompatReport> {
   return invoke<CompatReport>('check_compatibility', { installLocation });
 }
 
 export function runDiagnostics(installLocation: string): Promise<DiagnosticsReport> {
   return invoke<DiagnosticsReport>('run_diagnostics', { installLocation });
+}
+
+export function analyzeCrashes(installLocation: string): Promise<CrashEvent[]> {
+  return invoke<CrashEvent[]>('analyze_crashes', { installLocation });
 }

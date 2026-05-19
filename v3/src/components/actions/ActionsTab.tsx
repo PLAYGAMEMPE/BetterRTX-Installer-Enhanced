@@ -7,7 +7,8 @@ import Button from "../ui/Button";
 import SelectInstallationsDialog from "../SelectInstallationsDialog";
 import { CheckCircle } from "lucide-react";
 import { OptionsDialog } from "../OptionsDialog";
-import { runDiagnostics, type DiagnosticsReport } from "../../ipc/diagnostics";
+import { runDiagnostics, analyzeCrashes, type DiagnosticsReport, type CrashEvent } from "../../ipc/diagnostics";
+import BenchmarkPanel from "../benchmarks/BenchmarkPanel";
 
 type ModalType = "dlss" | "update" | "backup" | "uninstall" | "restore";
 
@@ -28,6 +29,9 @@ export default function ActionsTab() {
   const [diagInstall, setDiagInstall] = useState("");
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagReport, setDiagReport] = useState<DiagnosticsReport | null>(null);
+  const [crashInstall, setCrashInstall] = useState("");
+  const [crashLoading, setCrashLoading] = useState(false);
+  const [crashEvents, setCrashEvents] = useState<CrashEvent[]>([]);
 
 
   const openSelectDialog = (type: ModalType): void => {
@@ -91,6 +95,20 @@ export default function ActionsTab() {
       addMessage({ message: String(error), type: "error" });
     } finally {
       setDiagLoading(false);
+    }
+  };
+
+  const handleRunCrashAnalyzer = async () => {
+    if (!crashInstall) return;
+    setCrashLoading(true);
+    setCrashEvents([]);
+    try {
+      const events = await analyzeCrashes(crashInstall);
+      setCrashEvents(events);
+    } catch (error) {
+      addMessage({ message: String(error), type: "error" });
+    } finally {
+      setCrashLoading(false);
     }
   };
 
@@ -275,6 +293,54 @@ export default function ActionsTab() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Crash Analyzer */}
+        <div className="action-btn p-4 rounded-lg border bg-app-panel border-app-border w-full">
+          <h3 className="font-semibold mb-3 select-none cursor-default">{t("action_crash_analyzer_title", "Crash Analyzer")}</h3>
+          <p className="text-sm opacity-75 mb-3 select-none">{t("action_crash_analyzer_desc", "Scan Windows Event Log for Minecraft crashes and correlate with BetterRTX installations.")}</p>
+          <div className="flex gap-2 mb-3">
+            <select
+              value={crashInstall}
+              onChange={(e) => setCrashInstall(e.target.value)}
+              className="flex-1 px-3 py-2 bg-app-panel border border-app-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent"
+            >
+              <option value="">{t("diag_select_install", "Select installation…")}</option>
+              {installations.map((ins) => (
+                <option key={ins.InstallLocation} value={ins.InstallLocation}>{ins.FriendlyName}</option>
+              ))}
+            </select>
+            <Button theme="primary" size="md" disabled={!crashInstall || crashLoading} onClick={handleRunCrashAnalyzer}>
+              {crashLoading ? t("analyzing", "Analyzing…") : t("analyze", "Analyze")}
+            </Button>
+          </div>
+          {crashEvents.length === 0 && !crashLoading && crashInstall && (
+            <p className="text-xs opacity-60">{t("crash_none_found", "No Minecraft crashes found in the last 7 days.")}</p>
+          )}
+          {crashEvents.length > 0 && (
+            <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+              {crashEvents.map((ev) => (
+                <div
+                  key={`${ev.timestamp}-${ev.eventId}`}
+                  className={`text-xs rounded-md p-2 border ${ev.possiblyBrtxRelated ? "border-yellow-500/40 bg-yellow-500/10" : "border-app-border bg-app-bg"}`}
+                >
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="font-mono opacity-60">{new Date(ev.timestamp).toLocaleString()}</span>
+                    {ev.possiblyBrtxRelated && (
+                      <span className="text-yellow-400 font-medium">Possibly BetterRTX related</span>
+                    )}
+                  </div>
+                  <p className="opacity-75 truncate">{ev.message}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Benchmarks & FPS Estimator */}
+        <div className="action-btn p-4 rounded-lg border bg-app-panel border-app-border w-full">
+          <h3 className="font-semibold mb-3 select-none cursor-default">{t("action_benchmarks_title", "Benchmarks & FPS Estimator")}</h3>
+          <BenchmarkPanel />
         </div>
 
       </div>

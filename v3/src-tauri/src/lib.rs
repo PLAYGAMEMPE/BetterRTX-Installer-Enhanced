@@ -1840,6 +1840,11 @@ async fn install_preset(
     if let Err(e) = save_installed_preset(&install_location, &tracked) {
         log_ev!("warn", format!("No se pudo guardar seguimiento del preset: {e}"));
     }
+    // Registrar version de MC para deteccion de migracion futura.
+    if let Err(e) = app_core::migration::record_install(&install_location, Some(&preset_uuid), &brtx_dir()) {
+        log_ev!("warn", format!("No se pudo registrar version MC: {}", e.message()));
+    }
+
     log_ev!("info", format!("Preset '{}' instalado exitosamente", preset.name));
     let _ = std::fs::remove_file(&recovery_flag);
     Ok(())
@@ -1879,6 +1884,65 @@ fn verify_file_integrity(
 ) -> Result<bool, infra::error::AppError> {
     app_core::integrity::verify_file(std::path::Path::new(&file_path), &expected_sha256)?;
     Ok(true)
+}
+
+// ── Fase 3: migracion, crash analyzer, benchmarks ──────────────────────────
+
+/// Verifica si la version de Minecraft cambio desde la ultima instalacion de BetterRTX.
+#[tauri::command]
+fn check_migration_needed(install_location: String) -> app_core::migration::MigrationStatus {
+    tracing::info!("Verificando migracion para: {install_location}");
+    app_core::migration::check_migration(&install_location, &brtx_dir())
+}
+
+/// Analiza el Event Log de Windows buscando crashes de Minecraft en los ultimos 7 dias.
+#[tauri::command]
+fn analyze_crashes(
+    install_location: String,
+) -> Vec<app_core::diagnostics::crash_analyzer::CrashEvent> {
+    tracing::info!("Analizando crashes para: {install_location}");
+    let install_path = PathBuf::from(&install_location);
+    let backups = app_core::backup::list_backups(&install_path);
+    let timestamps: Vec<String> = backups.iter().map(|b| b.created_at.clone()).collect();
+    app_core::diagnostics::crash_analyzer::scan_crashes(&timestamps)
+}
+
+/// Detecta la GPU primaria del sistema y su tier de rendimiento.
+#[tauri::command]
+fn detect_gpu() -> app_core::benchmarks::GpuInfo {
+    app_core::benchmarks::detect_gpu()
+}
+
+/// Estima el rendimiento FPS esperado con BetterRTX segun la GPU detectada.
+#[tauri::command]
+fn estimate_fps(gpu_name: String) -> app_core::benchmarks::FpsEstimate {
+    app_core::benchmarks::estimate_fps(&gpu_name)
+}
+
+/// Lista todos los registros de benchmark guardados localmente.
+#[tauri::command]
+fn get_benchmarks() -> Vec<app_core::benchmarks::BenchmarkEntry> {
+    app_core::benchmarks::load_benchmarks(&brtx_dir())
+}
+
+/// Guarda un registro de benchmark manual (FPS promedio observado por el usuario).
+#[tauri::command]
+fn add_benchmark(
+    preset_uuid: String,
+    preset_name: String,
+    fps_avg: f32,
+    mc_version: String,
+) -> Result<(), infra::error::AppError> {
+    let gpu = app_core::benchmarks::detect_gpu();
+    let entry = app_core::benchmarks::BenchmarkEntry {
+        preset_uuid,
+        preset_name,
+        gpu_name: gpu.name,
+        fps_avg,
+        mc_version,
+        recorded_at: chrono::Utc::now().to_rfc3339(),
+    };
+    app_core::benchmarks::save_benchmark(&brtx_dir(), entry)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1956,6 +2020,12 @@ pub fn run() {
             restore_vanilla,
             run_diagnostics,
             check_compatibility,
+            check_migration_needed,
+            analyze_crashes,
+            detect_gpu,
+            estimate_fps,
+            get_benchmarks,
+            add_benchmark,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
