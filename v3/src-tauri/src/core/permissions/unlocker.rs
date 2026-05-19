@@ -4,7 +4,8 @@
 //! ultimo recurso cuando los providers nativos no logran escribir. Nunca son
 //! obligatorios: si no estan presentes, este provider simplemente no aplica.
 
-use super::{Confidence, InstallContext, InstallKind, PermissionProvider};
+use super::{Confidence, InstallContext, InstallKind, PermissionGrant, PermissionProvider};
+use crate::infra::error::AppError;
 use std::path::Path;
 
 pub struct UnlockerProvider;
@@ -39,5 +40,26 @@ impl PermissionProvider for UnlockerProvider {
             InstallKind::WindowsApps => Confidence::High,
             _ => Confidence::Low,
         }
+    }
+
+    fn acquire(&self, ctx: &InstallContext) -> Result<PermissionGrant, AppError> {
+        let unlockers = detect_unlockers();
+        if unlockers.is_empty() {
+            return Err(AppError::PermissionDenied {
+                path: ctx.materials_dir.display().to_string(),
+                strategy: "UnlockerProvider: ningun unlocker externo disponible".into(),
+            });
+        }
+        // El unlocker se invoca en el momento de la copia (DIRECT_OVERWRITE).
+        // Aqui solo verificamos que el binario existe.
+        Ok(PermissionGrant {
+            provider: self.name().to_string(),
+            original_sddl: None,
+            affected_paths: vec![ctx.materials_dir.clone()],
+        })
+    }
+
+    fn release(&self, _grant: PermissionGrant) -> Result<(), AppError> {
+        Ok(())
     }
 }

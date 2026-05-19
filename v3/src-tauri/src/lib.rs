@@ -1621,6 +1621,195 @@ async fn uninstall_package(app_handle: tauri::AppHandle, restore_initial: bool) 
     Ok(())
 }
 
+// ============================================================
+// Fase 1 MVP: sistema modular de instalacion con eventos
+// ============================================================
+
+#[derive(Clone, Serialize)]
+struct ProgressEvent {
+    step: u32,
+    total: u32,
+    label: String,
+    percent: f32,
+}
+
+#[derive(Clone, Serialize)]
+struct LogEvent {
+    level: String,
+    message: String,
+}
+
+/// Calcula el plan de instalacion optimo sin modificar ningun archivo.
+#[tauri::command]
+fn plan_install(install_location: String) -> app_core::installer::InstallPlan {
+    app_core::installer::plan_install(&install_location)
+}
+
+/// Lista los backups disponibles para una instalacion.
+#[tauri::command]
+fn list_backups(install_location: String) -> Vec<app_core::backup::BackupEntry> {
+    app_core::backup::list_backups(&PathBuf::from(&install_location))
+}
+
+/// Restaura la instalacion a vanilla desde el backup mas reciente.
+#[tauri::command]
+fn restore_vanilla(install_location: String) -> Result<app_core::backup::BackupManifest, String> {
+    let install_path = PathBuf::from(&install_location);
+    let materials_dir = install_path.join("data").join("renderer").join("materials");
+    app_core::backup::restore_vanilla(&install_path, &materials_dir).map_err(|e| e.message())
+}
+
+/// Instala un preset usando el motor hibrido modular con eventos de progreso.
+///
+/// Eventos emitidos:
+/// - `install://progress` `{ step, total, label, percent }`
+/// - `install://log`      `{ level, message }`
+/// - `install://rollback` `{ reason }` — solo si hay error
+#[tauri::command]
+async fn install_preset(
+    app: tauri::AppHandle,
+    install_location: String,
+    preset_uuid: String,
+) -> Result<(), String> {
+    use app_core::{backup, detection, installer, permissions};
+    use app_core::permissions::recovery::Journal;
+
+    const STEPS: u32 = 8;
+
+    macro_rules! progress {
+        ($step:expr, $label:expr) => {{
+            let _ = app.emit(
+                "install://progress",
+                ProgressEvent {
+                    step: $step,
+                    total: STEPS,
+                    label: $label.to_string(),
+                    percent: ($step as f32 / STEPS as f32) * 100.0,
+                },
+            );
+        }};
+    }
+    macro_rules! log_ev {
+        ($level:expr, $msg:expr) => {{
+            let msg: String = $msg.to_string();
+            tracing::info!("{}", msg);
+            let _ = app.emit("install://log", LogEvent { level: $level.to_string(), message: msg });
+        }};
+    }
+
+    // 1. Escanear y planificar.
+    progress!(1, "Calculando plan de instalacion...");
+    let cap = detection::scan_capabilities(&install_location);
+    let plan = installer::plan_install(&install_location);
+    log_ev!("info", format!("Plan: {:?} | Provider: {} | Confianza: {:?}",
+        plan.mechanism, plan.provider, plan.provider_confidence));
+
+    let install_path = PathBuf::from(&install_location);
+    let materials_dir = PathBuf::from(&plan.materials_dir);
+
+    // 2. Obtener preset de la cache (o descargarlo).
+    progress!(2, "Verificando preset...");
+    let packs = list_presets(false).await?;
+    let preset = packs
+        .iter()
+        .find(|p| p.uuid == preset_uuid)
+        .ok_or_else(|| format!("Preset '{preset_uuid}' no encontrado; refresca la lista"))?
+        .clone();
+
+    // 3. Descargar archivos del preset.
+    progress!(3, "Descargando archivos del preset...");
+    let pack_dir = brtx_dir().join("packs").join(&preset_uuid);
+    ensure_dir(&pack_dir).map_err(|e| e.to_string())?;
+    let client = Client::new();
+    let stub_path = pack_dir.join("RTXStub.material.bin");
+    let tone_path = pack_dir.join("RTXPostFX.Tonemapping.material.bin");
+    let bloom_path = pack_dir.join("RTXPostFX.Bloom.material.bin");
+    download_to_file_with_cache(&client, &preset.stub, &stub_path).await?;
+    download_to_file_with_cache(&client, &preset.tonemapping, &tone_path).await?;
+    download_to_file_with_cache(&client, &preset.bloom, &bloom_path).await?;
+    log_ev!("info", "Archivos del preset disponibles en cache local");
+
+    // 4. Backup verificado con manifest SHA256.
+    progress!(4, "Creando backup verificado...");
+    let session_id = chrono::Utc::now().timestamp_millis().to_string();
+    let mechanism_str = match plan.mechanism {
+        installer::Mechanism::IndexRedirect => "indexRedirect",
+        installer::Mechanism::DirectOverwrite => "directOverwrite",
+    };
+    let (backup_dir, _manifest) =
+        backup::create_backup(&install_path, &materials_dir, &session_id, mechanism_str)
+            .map_err(|e| e.message())?;
+    log_ev!("info", format!("Backup en: {}", backup_dir.display()));
+
+    // 5. Adquirir permisos.
+    progress!(5, "Adquiriendo permisos de escritura...");
+    let ctx = permissions::InstallContext {
+        install_location: install_path.clone(),
+        materials_dir: materials_dir.clone(),
+        kind: cap.install_kind,
+        directly_writable: cap.directly_writable,
+    };
+    let provider_name = plan.provider.clone();
+    let provider_acq = permissions::provider_by_name(&provider_name)
+        .ok_or_else(|| format!("Provider '{}' no reconocido", provider_name))?;
+    let grant = tokio::task::spawn_blocking({
+        let ctx = ctx.clone();
+        move || provider_acq.acquire(&ctx)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.message())?;
+    log_ev!("info", format!("Permisos adquiridos via {}", grant.provider));
+
+    // 6. Ejecutar instalacion.
+    progress!(6, "Instalando archivos del preset...");
+    let mut journal = Journal::new(&session_id);
+    let preset_files = [
+        ("RTXStub.material.bin", stub_path.as_path()),
+        ("RTXPostFX.Tonemapping.material.bin", tone_path.as_path()),
+        ("RTXPostFX.Bloom.material.bin", bloom_path.as_path()),
+    ];
+    let install_result = installer::execute(installer::InstallParams {
+        materials_dir: &materials_dir,
+        backup_dir: &backup_dir,
+        preset_files: &preset_files,
+        plan: &plan,
+        journal: &mut journal,
+    });
+
+    // 7. Liberar permisos (siempre, aunque la instalacion falle).
+    progress!(7, "Restaurando permisos originales...");
+    let provider_rel = permissions::provider_by_name(&provider_name).unwrap();
+    if let Err(e) = tokio::task::spawn_blocking(move || provider_rel.release(grant))
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        log_ev!("warn", format!("Advertencia al restaurar permisos: {}", e.message()));
+    }
+
+    // Propagar error de instalacion.
+    if let Err(e) = install_result {
+        let reason = e.message();
+        let _ = app.emit("install://rollback", serde_json::json!({ "reason": reason }));
+        return Err(reason);
+    }
+    journal.close();
+
+    // 8. Guardar seguimiento y finalizar.
+    progress!(8, "Finalizando...");
+    let tracked = InstalledPreset {
+        uuid: preset.uuid.clone(),
+        name: preset.name.clone(),
+        installed_at: chrono::Utc::now().to_rfc3339(),
+        is_creator: None,
+    };
+    if let Err(e) = save_installed_preset(&install_location, &tracked) {
+        log_ev!("warn", format!("No se pudo guardar seguimiento del preset: {e}"));
+    }
+    log_ev!("info", format!("Preset '{}' instalado exitosamente", preset.name));
+    Ok(())
+}
+
 /// Escanea las capacidades del entorno para una instalacion de Minecraft:
 /// tipo de instalacion, escritura directa, estado de materials.index.json,
 /// mecanismo recomendado y provider de permisos elegido.
@@ -1703,6 +1892,10 @@ pub fn run() {
             open_folder_dialog,
             scan_install_capabilities,
             verify_file_integrity,
+            plan_install,
+            install_preset,
+            list_backups,
+            restore_vanilla,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -20,6 +20,8 @@ pub mod xbox;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::infra::error::AppError;
+
 /// Confianza de un provider para resolver un contexto dado.
 /// El orden de declaracion define el orden natural: `None` < `Low` < `High`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -43,11 +45,9 @@ pub enum InstallKind {
 }
 
 /// Contexto que describe una instalacion concreta a la que se aplicara un preset.
-///
-/// `install_location` y `materials_dir` los consumira `acquire` en Fase 1.2.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct InstallContext {
+    #[allow(dead_code)]
     pub install_location: PathBuf,
     pub materials_dir: PathBuf,
     pub kind: InstallKind,
@@ -55,16 +55,36 @@ pub struct InstallContext {
     pub directly_writable: bool,
 }
 
-/// Estrategia desacoplada para obtener permisos de escritura.
+/// Token que representa permisos activos sobre la carpeta de materiales.
 ///
-/// Nota: `acquire`/`release` se incorporan en la siguiente iteracion (Fase 1.2).
-/// En esta fase los providers exponen `can_handle`, que alimenta el escaneo de
-/// capacidades y la seleccion dinamica de estrategia.
-pub trait PermissionProvider {
+/// Se debe pasar a `release` cuando la instalacion termine (exitosa o no),
+/// para restaurar el estado de seguridad previo.
+#[derive(Debug)]
+pub struct PermissionGrant {
+    /// Nombre del provider que emitio el grant.
+    pub provider: String,
+    /// SDDL de la ACL original, si el provider la modifico (AclProvider).
+    pub original_sddl: Option<String>,
+    /// Rutas afectadas por el grant (usadas en release para restaurar).
+    pub affected_paths: Vec<PathBuf>,
+}
+
+/// Estrategia desacoplada para obtener permisos de escritura.
+pub trait PermissionProvider: Send + Sync {
     /// Nombre estable del provider.
     fn name(&self) -> &str;
+
     /// Confianza con la que este provider puede manejar el contexto dado.
     fn can_handle(&self, ctx: &InstallContext) -> Confidence;
+
+    /// Obtiene permisos de escritura sobre la carpeta de materiales.
+    ///
+    /// Implementaciones deben ser idempotentes y siempre emitir un `PermissionGrant`
+    /// que permita a `release` restaurar el estado original.
+    fn acquire(&self, ctx: &InstallContext) -> Result<PermissionGrant, AppError>;
+
+    /// Libera los permisos adquiridos y restaura el estado de seguridad original.
+    fn release(&self, grant: PermissionGrant) -> Result<(), AppError>;
 }
 
 /// Resultado de la seleccion dinamica de estrategia de permisos.
@@ -115,5 +135,16 @@ pub fn recommend(ctx: &InstallContext) -> ProviderRecommendation {
         provider,
         confidence,
         alternatives,
+    }
+}
+
+/// Instancia el provider por nombre para usarlo en acquire/release.
+pub fn provider_by_name(name: &str) -> Option<Box<dyn PermissionProvider>> {
+    match name {
+        "XboxGamesProvider" => Some(Box::new(xbox::XboxGamesProvider)),
+        "AclProvider" => Some(Box::new(acl::AclProvider)),
+        "UnlockerProvider" => Some(Box::new(unlocker::UnlockerProvider)),
+        "StagedInstallProvider" => Some(Box::new(staged::StagedInstallProvider)),
+        _ => None,
     }
 }
