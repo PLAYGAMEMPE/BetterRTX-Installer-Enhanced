@@ -1,0 +1,9 @@
+# pnpm v11 — Approved build scripts
+# Controls which packages are allowed to run lifecycle scripts (postinstall, etc.)
+# This whitelist is the primary supply-chain defense: only explicitly approved
+# packages can execute arbitrary code during `pnpm install`.
+
+allowBuilds:
+  esbuild: true        # Vite bundler — downloads native binary
+  lightningcss: true   # TailwindCSS v4 CSS processor — native bindings
+  "@tauri-apps/cli": true  # Tauri CLI — official project, needs binary setup

@@ -24,6 +24,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: v3/pnpm-lock.yaml
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -32,28 +45,13 @@ jobs:
         with:
           workspaces: './v3/src-tauri -> target'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
       - name: Install frontend dependencies
         working-directory: ./v3
-        run: bun install
-
-      - name: Cache frontend dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ./v3/node_modules
-            ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+        run: pnpm install --frozen-lockfile
 
       - name: Build frontend
         working-directory: ./v3
-        run: bun run build
+        run: pnpm build
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0

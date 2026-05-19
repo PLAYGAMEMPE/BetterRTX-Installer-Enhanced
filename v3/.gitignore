@@ -13,6 +13,11 @@ dist-ssr
 *.local
 
 package-lock.json
+bun.lock
+bun.lockb
+yarn.lock
+
+# pnpm-lock.yaml is intentionally tracked — it ensures reproducible installs
 
 # Editor directories and files
 .vscode/*

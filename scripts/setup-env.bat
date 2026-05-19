@@ -1,7 +1,7 @@
 @echo off
 rem ============================================================
 rem  BetterRTX Easy Installer - Setup del entorno de desarrollo
-rem  Detecta e instala: Rust (+MSVC), Bun/Node, WebView2 Runtime.
+rem  Instala: Rust (+MSVC), pnpm v11+, Node 22 LTS, WebView2.
 rem  Compatible con Windows 10 (1809+) y Windows 11.
 rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
@@ -44,7 +44,7 @@ if not errorlevel 1 (
   call :ok "Rust instalado en %CARGO_BIN% (reabre la terminal para usarlo)."
   set "RESTART_NEEDED=1"
 ) else (
-  call :info "Instalando Rust (rustup)... necesario para compilar el backend Tauri."
+  call :info "Instalando Rust (rustup)..."
   winget install --id Rustlang.Rustup -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
   if exist "%CARGO_BIN%\rustc.exe" (
     call :ok "Rust instalado correctamente."
@@ -54,7 +54,7 @@ if not errorlevel 1 (
   )
 )
 
-rem ---- Toolchain MSVC (linker de C++ requerido por Rust) ------
+rem ---- Toolchain MSVC -----------------------------------------
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "HAS_MSVC=0"
 if exist "%VSWHERE%" (
@@ -63,7 +63,7 @@ if exist "%VSWHERE%" (
 if "!HAS_MSVC!"=="1" (
   call :ok "VS Build Tools (C++/MSVC) detectado."
 ) else (
-  call :info "Instalando VS Build Tools con workload C++ (descarga grande, ~2-3 GB)..."
+  call :info "Instalando VS Build Tools con workload C++ (~2-3 GB)..."
   winget install --id Microsoft.VisualStudio.2022.BuildTools -e --silent --accept-source-agreements --accept-package-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" >> "%LOG%" 2>&1
   if errorlevel 1 (
     call :err "No se pudo instalar VS Build Tools automaticamente."
@@ -73,78 +73,78 @@ if "!HAS_MSVC!"=="1" (
   )
 )
 
-rem ---- Bun (gestor preferido) ----------------------------------
-set "BUN_BIN=%USERPROFILE%\.bun\bin"
-where bun >nul 2>&1
-if not errorlevel 1 (
-  call :ok "Bun ya instalado y disponible en PATH."
-) else if exist "%BUN_BIN%\bun.exe" (
-  call :ok "Bun instalado en %BUN_BIN% (reabre la terminal para usarlo)."
-  set "RESTART_NEEDED=1"
-) else (
-  call :info "Instalando Bun... necesario para construir el frontend React."
-  winget install --id Oven-sh.Bun -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
-  if exist "%BUN_BIN%\bun.exe" (
-    call :ok "Bun instalado correctamente."
+rem ---- Node.js (requerido para pnpm) --------------------------
+set "NODE_EXE="
+where node >nul 2>&1
+if not errorlevel 1 set "NODE_EXE=node"
+if not defined NODE_EXE (
+  call :info "Instalando Node.js LTS (necesario para pnpm)..."
+  winget install --id OpenJS.NodeJS.LTS -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
+  where node >nul 2>&1
+  if not errorlevel 1 (
+    call :ok "Node.js instalado correctamente."
     set "RESTART_NEEDED=1"
   ) else (
-    call :info "No se pudo instalar Bun. Verificando si npm esta disponible como alternativa..."
-    where npm >nul 2>&1
-    if not errorlevel 1 (
-      call :ok "npm detectado y sera usado como alternativa a Bun."
-    ) else (
-      call :err "Ni Bun ni npm encontrados. Instala Node.js LTS desde https://nodejs.org"
-    )
+    call :err "No se pudo instalar Node.js. Instalalo desde https://nodejs.org"
+  )
+) else (
+  for /f "tokens=*" %%V in ('node --version 2^>nul') do call :ok "Node.js %%V detectado."
+)
+
+rem ---- pnpm v11+ (gestor de dependencias del proyecto) --------
+set "PNPM_EXE="
+where pnpm >nul 2>&1
+if not errorlevel 1 set "PNPM_EXE=pnpm"
+if not defined PNPM_EXE if exist "%APPDATA%\npm\pnpm.cmd" set "PNPM_EXE=%APPDATA%\npm\pnpm.cmd"
+if not defined PNPM_EXE (
+  call :info "Instalando pnpm v11+ via npm..."
+  npm install -g pnpm@11 >> "%LOG%" 2>&1
+  where pnpm >nul 2>&1
+  if not errorlevel 1 (
+    set "PNPM_EXE=pnpm"
+    call :ok "pnpm instalado correctamente."
+    set "RESTART_NEEDED=1"
+  ) else (
+    call :err "No se pudo instalar pnpm. Ejecuta manualmente: npm install -g pnpm@11"
+  )
+) else (
+  for /f "tokens=*" %%V in ('"%PNPM_EXE%" --version 2^>nul') do call :ok "pnpm v%%V detectado."
+)
+
+rem ---- Node 22 LTS local (aislado via pnpm env) ---------------
+if defined PNPM_EXE (
+  call :info "Descargando Node 22 LTS aislado para este proyecto (no afecta al Node global)..."
+  "%PNPM_EXE%" env use 22 --global >> "%LOG%" 2>&1
+  if not errorlevel 1 (
+    call :ok "Node 22 LTS configurado via pnpm env (aislado del sistema)."
+    call :info "Nota: el .npmrc del proyecto apunta a Node 22.22.3 para reproducibilidad."
+  ) else (
+    call :info "pnpm env: descarga de Node 22 no disponible en esta sesion. El .nvmrc/.node-version lo gestionara."
   )
 )
 
-rem ---- WebView2 Runtime (render de la app empaquetada) --------
+rem ---- WebView2 Runtime ---------------------------------------
 call :info "Verificando WebView2 Runtime..."
 winget install --id Microsoft.EdgeWebView2Runtime -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
-call :ok "WebView2 Runtime verificado (preinstalado en Windows 11)."
+call :ok "WebView2 Runtime verificado."
 
-rem ---- Dependencias del frontend (bun install / npm install) --
-set "BUN_EXE="
-where bun >nul 2>&1
-if not errorlevel 1 set "BUN_EXE=bun"
-if not defined BUN_EXE if exist "%BUN_BIN%\bun.exe" set "BUN_EXE=%BUN_BIN%\bun.exe"
-
-set "NPM_EXE="
-if not defined BUN_EXE (
-  where npm >nul 2>&1
-  if not errorlevel 1 set "NPM_EXE=npm"
-)
-
-if defined BUN_EXE (
+rem ---- Dependencias del frontend (pnpm install) ---------------
+if defined PNPM_EXE (
   if exist "%APP_DIR%\package.json" (
-    call :info "Instalando dependencias del frontend con Bun..."
+    call :info "Instalando dependencias del frontend con pnpm..."
     pushd "%APP_DIR%"
-    "%BUN_EXE%" install >> "%LOG%" 2>&1
+    "%PNPM_EXE%" install >> "%LOG%" 2>&1
     if errorlevel 1 (
-      call :err "Fallo 'bun install'. Revisa el log."
+      call :err "Fallo 'pnpm install'. Revisa el log."
     ) else (
-      call :ok "Dependencias del frontend instaladas con Bun."
-    )
-    popd
-  ) else (
-    call :err "No se encontro %APP_DIR%\package.json"
-  )
-) else if defined NPM_EXE (
-  if exist "%APP_DIR%\package.json" (
-    call :info "Instalando dependencias del frontend con npm..."
-    pushd "%APP_DIR%"
-    "%NPM_EXE%" install >> "%LOG%" 2>&1
-    if errorlevel 1 (
-      call :err "Fallo 'npm install'. Revisa el log."
-    ) else (
-      call :ok "Dependencias del frontend instaladas con npm."
+      call :ok "Dependencias instaladas con pnpm (lockfile verificado)."
     )
     popd
   ) else (
     call :err "No se encontro %APP_DIR%\package.json"
   )
 ) else (
-  call :info "Ningún gestor de paquetes disponible en esta sesion; las dependencias se instalaran al reabrir."
+  call :info "pnpm no disponible en esta sesion; ejecuta 'pnpm install' en v3/ al reabrir."
 )
 
 :summary

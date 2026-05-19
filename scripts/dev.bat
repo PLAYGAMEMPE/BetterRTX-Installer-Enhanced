@@ -2,7 +2,7 @@
 rem ============================================================
 rem  BetterRTX Easy Installer - Modo desarrollo (Tauri dev)
 rem  Lanza frontend (Vite) + backend (Rust) con hot-reload.
-rem  Usa Bun si esta disponible; de lo contrario, npm.
+rem  Gestor de dependencias: pnpm v11+ con Node 22 LTS (aislado).
 rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
 title BetterRTX Easy Installer - Dev
@@ -34,50 +34,37 @@ if not defined CARGO_EXE (
   endlocal & exit /b 1
 )
 
-rem ---- Detectar gestor de paquetes (Bun > npm) ---------------
-set "BUN_BIN=%USERPROFILE%\.bun\bin"
-set "BUN_EXE="
-where bun >nul 2>&1
-if not errorlevel 1 set "BUN_EXE=bun"
-if not defined BUN_EXE if exist "%BUN_BIN%\bun.exe" set "BUN_EXE=%BUN_BIN%\bun.exe"
-
-set "NPM_EXE="
-if not defined BUN_EXE (
-  where npm >nul 2>&1
-  if not errorlevel 1 set "NPM_EXE=npm"
-)
-
-if not defined BUN_EXE if not defined NPM_EXE (
-  echo   [ERROR] Ni Bun ni npm fueron encontrados.
-  echo   [ERROR] Instala Node.js LTS desde https://nodejs.org o Bun desde https://bun.sh
-  >> "%LOG%" echo [ERROR] Ni bun ni npm encontrados.
+rem ---- Validar pnpm -------------------------------------------
+set "PNPM_EXE="
+where pnpm >nul 2>&1
+if not errorlevel 1 set "PNPM_EXE=pnpm"
+if not defined PNPM_EXE if exist "%APPDATA%\npm\pnpm.cmd" set "PNPM_EXE=%APPDATA%\npm\pnpm.cmd"
+if not defined PNPM_EXE (
+  echo   [ERROR] pnpm no encontrado. Ejecuta primero: scripts\setup-env.bat
+  echo   [ERROR] O instala manualmente: npm install -g pnpm@11
+  >> "%LOG%" echo [ERROR] pnpm no encontrado.
   endlocal & exit /b 1
 )
 
-if defined BUN_EXE (
-  echo   [OK]    Rust y Bun detectados.
-) else (
-  echo   [OK]    Rust y npm detectados ^(Bun no disponible; usando npm como alternativa^).
-)
+rem ---- Verificar version de pnpm ------------------------------
+for /f "tokens=*" %%V in ('"%PNPM_EXE%" --version 2^>nul') do set "PNPM_VER=%%V"
+echo   [OK]    Rust y pnpm v!PNPM_VER! detectados.
+>> "%LOG%" echo [INFO] pnpm version: !PNPM_VER!
 
-rem ---- Sincronizar dependencias Rust (previene version mismatch)
-echo   [..]    Actualizando dependencias de Rust...
+rem ---- Sincronizar Rust (previene version mismatch) -----------
+echo   [..]    Sincronizando dependencias de Rust...
 pushd "%APP_DIR%\src-tauri"
 cargo update >> "%LOG%" 2>&1
 popd
-echo   [OK]    Dependencias de Rust actualizadas.
+echo   [OK]    Dependencias de Rust sincronizadas.
 
-rem ---- Dependencias del frontend ------------------------------
-if not exist "%APP_DIR%\node_modules" (
-  echo   [..]    node_modules ausente; instalando dependencias del frontend...
+rem ---- Dependencias del frontend (pnpm install) ---------------
+if not exist "%APP_DIR%\node_modules\.pnpm" (
+  echo   [..]    Instalando dependencias del frontend con pnpm...
   pushd "%APP_DIR%"
-  if defined BUN_EXE (
-    "%BUN_EXE%" install >> "%LOG%" 2>&1
-  ) else (
-    "%NPM_EXE%" install >> "%LOG%" 2>&1
-  )
+  "%PNPM_EXE%" install >> "%LOG%" 2>&1
   if errorlevel 1 (
-    echo   [ERROR] Fallo la instalacion de dependencias. Revisa %LOG%
+    echo   [ERROR] Fallo 'pnpm install'. Revisa %LOG%
     popd & endlocal & exit /b 1
   )
   popd
@@ -85,14 +72,11 @@ if not exist "%APP_DIR%\node_modules" (
 echo   [OK]    Dependencias del frontend listas.
 
 rem ---- Lanzar Tauri dev ---------------------------------------
-echo   [..]    Iniciando Tauri dev (cierra esta ventana para detener)...
+echo   [..]    Iniciando Tauri dev con Node 22 LTS y pnpm...
+echo   [..]    (cierra esta ventana para detener)
 echo(
 pushd "%APP_DIR%"
-if defined BUN_EXE (
-  "%BUN_EXE%" run tauri dev
-) else (
-  "%NPM_EXE%" run tauri dev
-)
+"%PNPM_EXE%" tauri dev
 set "RC=%ERRORLEVEL%"
 popd
 
