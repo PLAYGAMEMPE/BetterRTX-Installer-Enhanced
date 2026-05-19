@@ -34,3 +34,8 @@ walkdir = "2.5"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 url = "2.5"
 base64 = "0.21"
+# --- BetterRTX Easy Installer (fork): infraestructura adicional ---
+sha2 = "0.10"                                              # verificacion de integridad SHA256
+tracing = "0.1"                                            # logging estructurado
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"                                   # rotacion diaria de logs/install.log

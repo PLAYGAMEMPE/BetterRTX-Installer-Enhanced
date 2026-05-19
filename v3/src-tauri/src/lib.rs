@@ -14,6 +14,14 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::ShellExt;
 use url::Url;
 
+// --- BetterRTX Easy Installer (fork): arquitectura modular ---
+// `infra/`  cimientos transversales (errores tipados, logging).
+// `core/`   logica de negocio desacoplada de Tauri.
+// El modulo se llama `app_core` para no colisionar con la crate `core` de Rust.
+mod infra;
+#[path = "core/mod.rs"]
+mod app_core;
+
 const BRTX_DIR_NAME: &str = "graphics.bedrock";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1613,6 +1621,28 @@ async fn uninstall_package(app_handle: tauri::AppHandle, restore_initial: bool) 
     Ok(())
 }
 
+/// Escanea las capacidades del entorno para una instalacion de Minecraft:
+/// tipo de instalacion, escritura directa, estado de materials.index.json,
+/// mecanismo recomendado y provider de permisos elegido.
+#[tauri::command]
+fn scan_install_capabilities(
+    install_location: String,
+) -> Result<app_core::detection::CapabilityReport, infra::error::AppError> {
+    tracing::info!("Escaneando capacidades de: {install_location}");
+    Ok(app_core::detection::scan_capabilities(&install_location))
+}
+
+/// Verifica la integridad SHA256 de un archivo (p. ej. un `.material.bin`
+/// descargado) contra el hash esperado del manifest del preset.
+#[tauri::command]
+fn verify_file_integrity(
+    file_path: String,
+    expected_sha256: String,
+) -> Result<bool, infra::error::AppError> {
+    app_core::integrity::verify_file(std::path::Path::new(&file_path), &expected_sha256)?;
+    Ok(true)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1622,6 +1652,10 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            // BetterRTX Easy Installer: logging estructurado a logs/install.log
+            infra::logging::init(brtx_dir().join("logs"));
+            tracing::info!("BetterRTX Easy Installer iniciado");
+
             // Handle command line arguments for file associations and deep links
             let args: Vec<String> = std::env::args().collect();
             if args.len() > 1 {
@@ -1667,6 +1701,8 @@ pub fn run() {
             get_brtx_dir,
             validate_minecraft_path,
             open_folder_dialog,
+            scan_install_capabilities,
+            verify_file_integrity,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
