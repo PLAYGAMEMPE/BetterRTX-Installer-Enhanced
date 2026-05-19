@@ -1,0 +1,93 @@
+@import 'tailwindcss';
+@import "./theme.css";
+
+@utility scrollbar {
+  scrollbar-color: #5a5b5c #1e1e1f;
+  scrollbar-width: thin;
+}
+
+@utility btn {
+  @apply mt-2 flex items-stretch justify-stretch overflow-hidden rounded-sm rounded-b-md border-b-4 border-minecraft-slate-900 border-b-minecraft-slate-800 bg-minecraft-slate-700 text-lg font-semibold uppercase tracking-wide text-minecraft-slate-100 cursor-pointer outline-2 outline-minecraft-slate-900 transition-colors duration-200 ease-out;
+
+  .btn__wrapper {
+    @apply flex w-full flex-col items-center justify-center whitespace-nowrap rounded-sm border-2 border-minecraft-slate-600 p-4 text-sm font-medium transition-colors duration-200 ease-out;
+  }
+
+  &:hover {
+    @apply bg-minecraft-slate-600;
+  }
+
+  &:hover .btn__wrapper {
+    @apply border-minecraft-slate-400;
+  }
+
+  &:active,
+  &:active .btn__wrapper {
+    @apply border-b-2;
+  }
+
+  &:active,
+  &[disabled] {
+    @apply mt-2 translate-y-0.5;
+  }
+
+  &[disabled] {
+    @apply mt-1 cursor-not-allowed border-b;
+  }
+
+  &[disabled] &__wrapper {
+    @apply border-minecraft-slate-400 bg-minecraft-slate-600 text-minecraft-slate-100;
+  }
+
+  &.btn--primary {
+    @apply border-minecraft-green-300 bg-minecraft-green-500 text-white/90;
+
+    .btn__wrapper {
+      @apply border-minecraft-green-200 bg-minecraft-green-400 text-white/90;
+    }
+
+    &:hover {
+      @apply bg-minecraft-green-300;
+    }
+
+    &:hover .btn__wrapper {
+      @apply border-minecraft-green-100 bg-minecraft-green-300;
+    }
+
+    &[disabled] {
+      @apply border-minecraft-green-900 bg-minecraft-slate-400;
+    }
+
+    &[disabled] .btn__wrapper {
+      @apply border-minecraft-green-500/50 bg-minecraft-green-800/50 text-white/25;
+    }
+  }
+
+  &.btn--secondary {
+    @apply border-minecraft-slate-400 bg-minecraft-slate-200/90;
+
+    .btn__wrapper {
+      @apply border-minecraft-slate-50/75 text-minecraft-slate-900;
+    }
+
+    &:hover {
+      @apply bg-minecraft-slate-300;
+    }
+
+    &:hover .btn__wrapper {
+      @apply border-minecraft-slate-100 bg-minecraft-slate-200;
+    }
+
+    &[disabled] {
+      @apply border-minecraft-slate-900 bg-minecraft-slate-400;
+    }
+
+    &[disabled] .btn__wrapper {
+      @apply border-minecraft-slate-50/50 bg-minecraft-slate-200/50 text-minecraft-slate-900/50;
+    }
+  }
+
+  &.btn--small .btn__wrapper {
+    @apply p-2 text-xs;
+  }
+}

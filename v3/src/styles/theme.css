@@ -1,0 +1,86 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/martian-mono";
+@theme {
+    --font-mono: 'Martian Mono Variable', 'Martian Mono', system-monospace, monospace;
+    --font-sans: 'Inter Variable', Inter, Helvetica, Arial, system-ui, sans-serif;
+    --height-app: calc(100vh - (--spacing(16)));
+  
+    --width-app: calc(100vw - (--spacing(64)));
+    --width-sidenav: --spacing(64);
+  
+    --color-minecraft-slate-50: oklch(99.33% 0.0011 197.14deg);
+    --color-minecraft-slate-100: oklch(92.75% 0.0017 247.84deg);
+    --color-minecraft-slate-200: oklch(86.08% 0.0043 271.36deg);
+    --color-minecraft-slate-300: oklch(64.35% 0.0046 271.34deg);
+    --color-minecraft-slate-400: oklch(53.09% 0.0067 264.51deg);
+    --color-minecraft-slate-500: oklch(49.54% 0.0054 258.34deg);
+    --color-minecraft-slate-600: oklch(47.06% 0.0021 247.87deg);
+    --color-minecraft-slate-700: oklch(40.48% 0.0021 247.88deg);
+    --color-minecraft-slate-800: oklch(31.65% 0.0023 247.90deg);
+    --color-minecraft-slate-900: oklch(23.54% 0.0019 286.25deg);
+  
+    --color-minecraft-blue-50: oklch(97.09% 0.0125 255.50deg);
+    --color-minecraft-blue-100: oklch(93.43% 0.0293 252.95deg);
+    --color-minecraft-blue-200: oklch(88.50% 0.0529 252.79deg);
+    --color-minecraft-blue-300: oklch(81.38% 0.0890 249.96deg);
+    --color-minecraft-blue-400: oklch(72.20% 0.1313 252.45deg);
+    --color-minecraft-blue-500: oklch(63.16% 0.1729 258.52deg);
+    --color-minecraft-blue-600: oklch(55.97% 0.1962 262.16deg);
+    --color-minecraft-blue-700: oklch(49.75% 0.2002 263.90deg);
+    --color-minecraft-blue-800: oklch(43.15% 0.1669 265.52deg);
+    --color-minecraft-blue-900: oklch(38.65% 0.1273 264.74deg);
+  
+    --color-minecraft-green-50: oklch(71.41% 0.1403 137.92deg);
+    --color-minecraft-green-100: oklch(64.63% 0.1684 138.72deg);
+    --color-minecraft-green-200: oklch(54.98% 0.1477 139.52deg);
+    --color-minecraft-green-300: oklch(46.35% 0.1168 139.76deg);
+    --color-minecraft-green-400: oklch(37.34% 0.1020 140.48deg);
+    --color-minecraft-green-500: oklch(40.21% 0.0936 139.86deg);
+    --color-minecraft-green-600: oklch(36.45% 0.0776 140.27deg);
+    --color-minecraft-green-700: oklch(33.22% 0.0730 141.61deg);
+    --color-minecraft-green-800: oklch(29.53% 0.0610 141.10deg);
+    --color-minecraft-green-900: oklch(27.32% 0.0505 138.53deg);
+  
+    --color-minecraft-purple-50: oklch(97.00% 0.0133 286.15deg);
+    --color-minecraft-purple-100: oklch(94.42% 0.0255 290.74deg);
+    --color-minecraft-purple-200: oklch(89.59% 0.0491 289.19deg);
+    --color-minecraft-purple-300: oklch(81.32% 0.0925 290.43deg);
+    --color-minecraft-purple-400: oklch(71.10% 0.1449 290.41deg);
+    --color-minecraft-purple-500: oklch(60.38% 0.2013 289.50deg);
+    --color-minecraft-purple-600: oklch(53.85% 0.2266 289.76deg);
+    --color-minecraft-purple-700: oklch(47.97% 0.2262 288.96deg);
+    --color-minecraft-purple-800: oklch(42.29% 0.1967 289.28deg);
+    --color-minecraft-purple-900: oklch(37.21% 0.1651 289.87deg);
+    --color-minecraft-purple-950: oklch(27.78% 0.1260 287.63deg);
+  
+    --color-minecraft-red-50: oklch(97.19% 0.0108 17.34deg);
+    --color-minecraft-red-100: oklch(93.96% 0.0241 17.59deg);
+    --color-minecraft-red-200: oklch(89.04% 0.0475 18.08deg);
+    --color-minecraft-red-300: oklch(81.48% 0.0837 19.04deg);
+    --color-minecraft-red-400: oklch(71.46% 0.1345 20.98deg);
+    --color-minecraft-red-500: oklch(63.05% 0.1719 23.41deg);
+    --color-minecraft-red-600: oklch(55.90% 0.1851 25.52deg);
+    --color-minecraft-red-700: oklch(49.07% 0.1638 25.63deg);
+    --color-minecraft-red-800: oklch(43.37% 0.1374 24.96deg);
+    --color-minecraft-red-900: oklch(39.10% 0.1124 23.91deg);
+    --color-minecraft-red-950: oklch(25.35% 0.0735 23.99deg);
+
+    --color-muted: oklch(60% 0.1719 23.41deg);
+
+    /* App semantic color tokens */
+    --color-app-bg: var(--color-minecraft-slate-900);
+    --color-app-panel: var(--color-minecraft-slate-800);
+    --color-app-elev: var(--color-minecraft-slate-700);
+    --color-app-fg: var(--color-minecraft-slate-50);
+    --color-app-muted: var(--color-minecraft-slate-300);
+    --color-app-border: var(--color-minecraft-slate-700);
+    --color-brand-accent: var(--color-minecraft-blue-500);
+    --color-brand-accent-600: var(--color-minecraft-blue-600);
+    --color-success: var(--color-minecraft-green-500);
+    --color-success-600: var(--color-minecraft-green-600);
+    --color-danger: var(--color-minecraft-red-600);
+    --color-danger-600: var(--color-minecraft-red-600);
+    --color-danger-700: var(--color-minecraft-red-700);
+    --color-danger-800: var(--color-minecraft-red-800);
+  }

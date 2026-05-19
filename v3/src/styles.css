@@ -1,0 +1,1294 @@
+@import "tailwindcss";
+@import "./styles/theme.css";
+@import "./styles/ui.css";
+
+@keyframes rainbow-cycle {
+  0% {
+    fill: oklch(0.901 0.058 230.902);
+    border-color: oklch(0.951 0.026 236.824);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.5),
+      0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+
+  10% {
+    fill: oklch(0.882 0.059 254.128);
+    border-color: oklch(0.932 0.032 255.585);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.75),
+      0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+
+  20% {
+    fill: oklch(0.894 0.057 293.283);
+    border-color: oklch(0.943 0.029 294.588);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.85),
+      0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+
+  30% {
+    fill: oklch(0.892 0.058 10.001);
+    border-color: oklch(0.941 0.03 12.58);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.75),
+      0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+
+  40% {
+    fill: oklch(0.885 0.062 18.334);
+    border-color: oklch(0.936 0.032 17.717);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.65),
+      0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+
+  50% {
+    fill: oklch(0.901 0.076 70.697);
+    border-color: oklch(0.954 0.038 75.164);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.75),
+      0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+
+  60% {
+    fill: oklch(0.924 0.12 95.746);
+    border-color: oklch(0.962 0.059 95.617);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.5),
+      0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+
+  70% {
+    fill: oklch(0.945 0.129 101.54);
+    border-color: oklch(0.973 0.071 103.193);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.65),
+      0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+
+  80% {
+    fill: oklch(0.938 0.127 124.321);
+    border-color: oklch(0.967 0.067 122.328);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.85),
+      0 2px 4px -2px rgba(0, 0, 0, 0.85);
+  }
+
+  90% {
+    fill: oklch(0.905 0.093 164.15);
+    border-color: oklch(0.95 0.052 163.051);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.75),
+      0 2px 4px -2px rgba(0, 0, 0, 0.75);
+  }
+
+  100% {
+    fill: oklch(0.917 0.08 205.041);
+    border-color: oklch(0.956 0.045 203.388);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.5),
+      0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  }
+}
+
+@keyframes tab-view-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.995);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Custom utilities - must be at top level, not nested in @layer */
+@utility panel {
+  @apply rounded-lg border shadow-sm bg-app-panel border-app-border;
+}
+
+@utility panel__header {
+  @apply border-b px-4 py-3 border-app-border;
+}
+
+@utility panel__title {
+  @apply text-base font-semibold;
+}
+
+@utility panel__body {
+  @apply p-4;
+}
+
+@utility button {
+  @apply btn;
+}
+
+@utility button--primary {
+  @apply btn;
+}
+
+@utility button--ghost {
+  background-color: transparent;
+  box-shadow: none;
+
+  &:hover {
+    box-shadow: none;
+  }
+
+  &:active {
+    box-shadow: none;
+  }
+}
+
+@utility button--danger {
+  @apply text-white bg-danger-600 border-danger-700;
+  box-shadow: 0 3px 0 0 color-mix(in oklab, var(--color-danger-700) 80%, black 20%);
+
+  &:hover {
+    @apply bg-danger-700;
+    transform: translateY(1px);
+    box-shadow: 0 2px 0 0 color-mix(in oklab, var(--color-danger-700) 80%, black 20%);
+  }
+
+  &:active {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-danger-700) 80%, black 20%);
+  }
+}
+
+@utility badge {
+  @apply inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold border-app-border;
+}
+
+@utility hover-lift {
+  @apply transition-transform;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
+}
+
+@utility max-h-app-tab {
+  @apply max-h-[calc(100vh-6rem)];
+}
+
+@utility max-h-app-tab-expanded {
+  @apply max-h-[calc(100vh-22rem)];
+}
+
+@utility rainbow-animate {
+  animation: rainbow-cycle 2s infinite;
+  fill: currentColor;
+}
+
+/* Tailwind layers + BEM-style component classes for the installer UI */
+@layer base {
+
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply antialiased font-sans bg-app-bg text-app-fg overflow-hidden;
+  }
+
+}
+
+@layer utilities {
+  .max-h-app-tab {
+    @apply max-h-app-tab;
+  }
+
+  body:has(.dialog-overlay,.console-panel--expanded) .max-h-app-tab {
+    @apply max-h-app-tab-expanded;
+  }
+}
+
+@layer components {
+
+  /* App shell */
+  .app {
+    @apply grid min-h-screen;
+    grid-template-rows: 3rem 1fr;
+  }
+
+  .app__header {
+    @apply sticky top-0 z-40 flex items-center gap-3 border-b px-4 border-app-border;
+    background-color: color-mix(in oklab, var(--color-app-bg) 85%, black 15%);
+  }
+
+  .app__brand {
+    @apply text-sm font-semibold tracking-wide;
+  }
+
+  .app__badge {
+    @apply inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold border border-app-border bg-success-600 text-white;
+  }
+
+  .app__body {
+    @apply grid;
+    grid-template-columns: 16rem 1fr;
+  }
+
+  .app__sidebar {
+    @apply hidden md:flex md:flex-col gap-1 border-r p-4 bg-app-panel border-app-border;
+  }
+
+  .app__content {
+    @apply p-4 md:p-6;
+  }
+
+  /* Tab view transitions */
+  .tab-content {
+    @apply relative w-full max-w-fit mx-auto p-4 h-fit overflow-auto max-h-app-tab scrollbar;
+  }
+
+  body:has(.dialog-overlay,.console-panel--expanded) .tab-content {
+    @apply max-h-app-tab-expanded;
+  }
+
+  .tab-view {
+    animation: tab-view-enter 180ms ease-out;
+    will-change: opacity, transform;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tab-view {
+      animation: none;
+    }
+  }
+
+  /* Sidebar navigation */
+  .nav {
+    @apply flex flex-col gap-1;
+  }
+
+  .nav__link {
+    @apply w-full text-left rounded-md px-3 py-2 text-sm border transition-colors text-app-fg border-transparent bg-app-panel/95;
+  }
+
+  .nav__link:hover {
+    @apply border-app-border bg-app-panel/90;
+  }
+
+  .nav__link--active {
+    @apply border-minecraft-blue-600 bg-minecraft-blue-600/20;
+  }
+
+  /* Panels / cards - utilities moved to top level */
+
+  /* Sections */
+  .section {
+    @apply space-y-2;
+  }
+
+  .section__title {
+    @apply text-xs font-semibold uppercase tracking-wider text-app-muted;
+  }
+
+  .divider {
+    @apply my-4 h-px w-full bg-app-border;
+  }
+
+  /* Buttons - utilities moved to top level */
+
+  /* Form controls */
+  .field {
+    @apply grid gap-1;
+  }
+
+  .field__label {
+    @apply text-xs font-medium text-app-muted;
+  }
+
+  .field__control {
+    @apply relative;
+  }
+
+  .field__input {
+    @apply w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 border-app-border text-app-fg;
+  }
+
+  .field__input:focus {
+    @apply ring-brand-accent border-minecraft-blue-600;
+  }
+
+  /* Badges - utilities moved to top level */
+  .badge--on {
+    @apply text-black bg-minecraft-green-300 border-minecraft-green-400;
+  }
+
+  .main-content {
+    @apply overflow-y-auto scrollbar m-0 mt-auto min-h-min max-h-app-tab p-0 w-full;
+  }
+
+  body:has(.console-panel--expanded) .main-content {
+    @apply max-h-app-tab-expanded;
+  }
+
+  /* Top toolbar */
+  .top-toolbar {
+    @apply sticky top-0 z-50 flex h-12 items-center justify-between border-b px-3 md:px-4 border-app-border;
+    background-color: color-mix(in oklab, var(--color-app-bg) 85%, black 15%);
+  }
+
+  .toolbar-right {
+    @apply flex items-center gap-2;
+  }
+
+  .app-version {
+    @apply text-xs text-app-muted font-mono cursor-default;
+  }
+
+  .app-version--link {
+    @apply cursor-pointer hover:text-brand-accent transition-colors border-0 bg-transparent p-0;
+  }
+
+  .app-version--link:hover {
+    @apply underline;
+  }
+
+  /* Secondary toolbar */
+  .secondary-toolbar {
+    @apply sticky top-12 z-40 border-b px-4 py-3 border-app-border bg-app-panel;
+  }
+
+  .secondary-toolbar__content {
+    @apply flex items-center justify-between;
+  }
+
+  .installations-toolbar {
+    @apply sticky top-12 z-40 border-b px-4 py-3 border-app-border bg-app-panel;
+  }
+
+  .installations-toolbar .installation-card {
+    @apply border-0;
+  }
+
+  .app-title {
+    @apply text-sm md:text-base font-semibold;
+  }
+
+  .nav-tabs {
+    @apply flex border-2 border-minecraft-slate-800 bg-minecraft-slate-900 rounded-sm;
+  }
+
+  .nav-btn {
+    @apply flex-1 py-1.5 px-4 text-center cursor-pointer bg-minecraft-slate-600 text-white/80 border-2 border-transparent -m-px font-semibold uppercase tracking-wider text-xs;
+  }
+
+  .nav-btn:hover {
+    @apply bg-minecraft-slate-500 text-white;
+  }
+
+  .nav-btn.active {
+    @apply bg-minecraft-slate-500 text-white border-b-2 border-b-white/90;
+  }
+
+  .toolbar-icon-btn {
+    @apply grid h-8 w-8 place-items-center rounded-md border text-sm border-app-border;
+  }
+
+  /* Layout */
+  .app-layout {
+    @apply relative;
+  }
+
+
+  .app-header h1 {
+    @apply text-xl font-semibold;
+  }
+
+  .app-header p {
+    @apply text-sm;
+  }
+
+  /* Slideout sidepanel (mobile) */
+  .mobile-menu-toggle {
+    @apply md:hidden absolute left-3 top-14 z-40 grid h-10 w-10 place-items-center rounded-md border border-app-border bg-app-panel;
+  }
+
+  .mobile-menu-toggle>span {
+    @apply block h-0.5 w-5 rounded bg-app-fg;
+  }
+
+  .mobile-menu-toggle>span+span {
+    @apply mt-1;
+  }
+
+  .actions-sidepanel {
+    @apply fixed left-0 top-0 z-50 h-full w-72 -translate-x-full transform border-r p-4 transition-transform md:hidden bg-app-panel border-app-border;
+  }
+
+  .actions-sidepanel.open {
+    @apply translate-x-0;
+  }
+
+  .sidepanel-header {
+    @apply mb-3 flex items-center justify-between;
+  }
+
+  .sidepanel-content {
+    @apply overflow-y-auto;
+  }
+
+  .sidepanel-overlay {
+    @apply fixed inset-0 z-40 hidden bg-black/50 md:hidden;
+  }
+
+  .sidepanel-overlay.visible {
+    @apply block;
+  }
+
+  /* Desktop/Mobile visibility helpers */
+  .desktop-only {
+    @apply hidden md:block;
+  }
+
+  .mobile-only {
+    @apply md:hidden;
+  }
+
+  /* Section toolbars */
+  .section-toolbar {
+    @apply mb-3 flex items-center justify-between;
+  }
+
+  .toolbar-title {
+    @apply flex items-center gap-2;
+  }
+
+  .toolbar-title h2 {
+    @apply text-lg font-semibold;
+  }
+
+  .item-count {
+    @apply text-xs text-app-muted;
+  }
+
+  .toolbar-actions {
+    @apply flex items-center gap-2;
+  }
+
+  .toolbar-btn {
+    @apply button;
+  }
+
+  /* Actions */
+  .actions-list {
+    @apply grid gap-2;
+  }
+
+  .actions-grid {
+    @apply grid gap-2 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  /* Installations grid/cards */
+  .installations-container {
+    @apply flex flex-col gap-4 w-full max-w-full;
+  }
+
+  .installations-grid {
+    @apply flex flex-col md:flex-row;
+  }
+
+  .installation-card {
+    @apply panel flex flex-col flex-1 cursor-pointer contain-layout transition-all duration-200 rounded-lg border hover:shadow-lg bg-minecraft-slate-800/50;
+  }
+
+  .installation-card.selected {
+    @apply border-brand-accent;
+  }
+
+  .installation-header {
+    @apply text-sm font-semibold mb-2 flex items-center justify-between border-b border-app-border p-2 bg-app-panel rounded-t-lg;
+  }
+
+  .installation-footer {
+    @apply p-2 bg-app-panel rounded-b-lg mt-auto;
+  }
+
+  .installation-placeholder {
+    @apply w-full h-32 bg-app-border/20 rounded flex items-center justify-center mb-2;
+  }
+
+  .installation-details {
+    @apply flex flex-row gap-3 transition-all duration-200 overflow-hidden my-auto;
+  }
+
+  .installation-title {
+    @apply flex items-center gap-2;
+  }
+
+  .installation-title h3 {
+    @apply text-sm font-semibold;
+  }
+
+  .installation-checkbox {
+    @apply cursor-pointer accent-brand-accent bg-minecraft-slate-500 border-minecraft-slate-800 appearance-none rounded-xs;
+  }
+
+  .preset-icon {
+    @apply w-full h-auto rounded object-cover mb-2;
+  }
+
+  .preview-badge {
+    @apply badge bg-brand-accent-600 text-white text-xs;
+    border-color: color-mix(in oklab, var(--color-brand-accent-600) 70%, black 30%);
+  }
+
+  .creator-badge {
+    @apply badge bg-green-600 text-white text-xs;
+    border-color: color-mix(in oklab, var(--color-green-600) 70%, black 30%);
+  }
+
+  .creator-icon {
+    @apply w-6 h-6 rounded-full bg-gradient-to-tr from-transparent via-white/25 to-transparent hover:to-black/25 hover:from-black/25 transition-all duration-200 bg-blend-overlay text-shadow-2xs;
+    background-size: 200%;
+
+    &:hover {
+      @apply bg-black/25;
+      background-position: 100% 0;
+    }
+  }
+
+  .creator-container {
+    @apply flex flex-col;
+  }
+
+  .creator-content {
+    @apply space-y-2 flex flex-col sm:grid sm:grid-cols-2 gap-4 sm:space-y-0;
+  }
+
+  .installation-path {
+    @apply px-4 pt-2 text-xs text-app-muted break-all font-mono select-all;
+  }
+
+  .installed-preset-info {
+    @apply space-y-1;
+  }
+
+  .no-preset-info {
+    @apply text-app-muted;
+  }
+
+  .installation-actions {
+    @apply panel__body flex items-center gap-2;
+  }
+
+  .checkbox-label {
+    @apply text-xs text-app-muted;
+  }
+
+  .installation-action-btn {
+    @apply m-0;
+  }
+
+  /* Presets */
+  .presets-grid {
+    @apply flex flex-col max-w-full gap-4;
+  }
+
+  .presets-list {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4;
+  }
+
+  .preset-card {
+    @apply panel flex flex-col h-full cursor-pointer contain-layout transition-all duration-200 rounded-lg border p-4 hover:shadow-lg;
+  }
+
+  .preset-card.selected {
+    @apply border-brand-accent;
+  }
+
+  .preset-list:has(.preset-card.selected) .preset-card:not(.selected) {
+    @apply bg-red-500;
+  }
+
+  .preset-header {
+    @apply flex items-center gap-3 px-4 py-3;
+  }
+
+  .preset-title {
+    @apply text-sm font-semibold;
+  }
+
+  .preset-header__toggle {
+    @apply ml-auto pl-3 border-l border-app-border text-app-muted hover:text-app-fg transition-colors h-6 flex items-center;
+  }
+
+  .preset-header__chevron {
+    @apply transition-transform;
+  }
+
+  .preset-header__chevron--rotated {
+    transform: rotate(180deg);
+  }
+
+  .preset-link {
+    @apply hover:underline cursor-pointer;
+  }
+
+  .preset-stub-container {
+    @apply w-full min-w-0 overflow-hidden relative h-10 inline-block;
+    scrollbar-gutter: stable;
+  }
+
+  .preset-stub-container:hover {
+    @apply overflow-x-auto;
+  }
+
+  .preset-stub-link {
+    @apply hover:underline cursor-pointer font-mono text-xs whitespace-nowrap block transition-all duration-200;
+  }
+
+  .preset-stub-container:not(:hover) .preset-stub-link {
+    @apply overflow-hidden max-w-full text-ellipsis;
+  }
+
+  .preset-details {
+    @apply flex flex-col gap-3;
+  }
+
+  .preset-card__footer {
+    @apply mt-auto pt-4;
+  }
+
+  .install-preset-btn {
+    @apply btn;
+  }
+
+  .installation-action-btn {
+    @apply m-0;
+  }
+
+  /* Empty state */
+  .empty-state {
+    @apply panel p-6 text-center text-sm text-app-muted;
+  }
+
+  /* Drag & drop */
+  .drop-zone {
+    @apply my-6 grid h-28 place-items-center rounded-md border-2 border-dashed border-app-border bg-app-panel/90;
+  }
+
+  .drop-zone.drag-over {
+    @apply border-brand-accent bg-brand-accent/10;
+  }
+
+  /* Status & progress */
+  .status {
+    @apply text-sm;
+  }
+
+  .status.error {
+    @apply text-danger-600;
+  }
+
+  .progress-container {
+    @apply mt-2 h-2 w-full overflow-hidden rounded bg-black/30;
+  }
+
+  .progress-bar {
+    @apply h-full w-1/2 bg-brand-accent-600;
+  }
+
+  /* Console */
+  .console-container {
+    @apply flex flex-col overflow-hidden relative h-min;
+  }
+
+  .console-header {
+    @apply outline-1 outline-black mt-6 flex cursor-pointer items-center justify-between border px-4 py-2 border-app-border bg-app-panel;
+  }
+
+  .console-panel {
+    @apply overflow-hidden rounded-b-md border border-app-border bg-app-panel/50 backdrop-blur-sm;
+    max-height: 18rem;
+    transition: max-height .2s ease;
+  }
+
+  .console-panel.collapsed {
+    max-height: 0;
+    border-top-width: 0;
+  }
+
+  .console-panel.expanded {
+    max-height: 18rem;
+  }
+
+  .console-output {
+    @apply font-mono p-4 text-xs h-64 overflow-y-auto whitespace-pre-wrap break-all relative text-app-muted contain-paint scrollbar;
+  }
+
+  .console-clear-btn {
+    @apply m-2 self-end button;
+  }
+
+  /* Toolbar menu button */
+  .toolbar-menu-btn {
+    @apply p-2 rounded-md text-app-muted hover:text-app-fg hover:bg-app-border transition-colors border-0;
+  }
+
+  /* Popovers */
+  .settings-popover,
+  .help-popover {
+    @apply rounded-md border shadow-lg border-app-border bg-app-panel text-app-fg;
+  }
+
+  .toolbar-popover {
+    @apply rounded-md border shadow-2xl outline outline-black/75 border-app-border bg-app-panel/50 backdrop-blur-xl text-app-fg fixed top-16 right-4 z-1000 min-w-80 max-w-[calc(100vw-2rem)];
+  }
+
+  .popover-header {
+    @apply flex items-center justify-between border-b px-4 py-2 border-app-border;
+  }
+
+  .popover-content {
+    @apply p-4 space-y-4;
+  }
+
+  .setting-group>label {
+    @apply block text-xs font-semibold text-muted mb-1;
+  }
+
+  .setting-buttons {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .setting-btn {
+    @apply button;
+  }
+
+  .setting-btn.danger {
+    @apply button--danger;
+  }
+
+  .status-alert {
+    @apply fixed right-2 bottom-14 z-40 flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg cursor-pointer select-none;
+  }
+
+  /* Console Panel Component */
+  .console-container {
+    @apply flex flex-col overflow-hidden relative;
+  }
+
+  .console-output {
+    @apply font-mono;
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+
+  .console-clear-btn {
+    @apply font-sans;
+  }
+
+  .console-panel--expanded {
+    @apply max-h-80;
+  }
+
+  .console-panel--collapsed {
+    @apply max-h-0 rounded-b-xl;
+  }
+
+  body:has(.console-panel--expanded) .status-alert {
+    @apply bottom-80;
+  }
+
+  /* Switch Component */
+  .switch {
+    @apply flex w-fit min-w-min max-w-48;
+  }
+
+  .switch:hover .switch__track .switch__button {
+    @apply rounded-md bg-minecraft-slate-300/50;
+  }
+
+  .switch:hover .switch__track[data-checked] .switch__button {
+    @apply bg-minecraft-slate-200;
+  }
+
+  .switch:hover .switch__handle {
+    @apply border-x-minecraft-slate-700 border-b-minecraft-slate-800;
+  }
+
+  .switch:hover .switch__track[data-checked] {
+    @apply border-minecraft-green-100 bg-minecraft-green-200;
+  }
+
+  .switch__label {
+    @apply cursor-pointer select-none text-sm font-medium text-minecraft-slate-100 col-span-2 row-span-2 place-items-center;
+  }
+
+  .switch__description {
+    @apply cursor-default select-none text-sm text-minecraft-slate-300 col-span-2;
+  }
+
+  .switch__handle {
+    @apply -mt-2 flex size-12 -translate-x-1 items-stretch rounded-md border border-b-4 border-minecraft-slate-400 border-b-minecraft-slate-600 bg-minecraft-slate-200 shadow-md outline-1 outline-minecraft-slate-900/50 transition duration-300 ease-out group-data-checked:translate-x-12 cursor-pointer;
+  }
+
+  .switch:hover .switch__handle {
+    @apply border-x-minecraft-slate-700 border-b-minecraft-slate-800 cursor-pointer;
+  }
+
+  .switch__button {
+    @apply h-full w-full rounded-sm border-2 border-minecraft-slate-50/75 pt-4 transition duration-200 ease-out cursor-pointer;
+  }
+
+  .switch:hover .switch__track .switch__button {
+    @apply rounded-md bg-minecraft-slate-300/50;
+  }
+
+  .switch:hover .switch__track[data-checked] .switch__button {
+    @apply bg-minecraft-slate-200;
+  }
+
+  .switch__track {
+    @apply relative row-span-2 mt-2 inline-flex h-10 w-24 items-center place-self-center justify-self-end rounded-sm border-2 border-minecraft-slate-900/60 bg-minecraft-slate-300 shadow-xs outline-1 outline-black/50 transition data-checked:border-minecraft-green-200 data-checked:bg-minecraft-green-300 cursor-pointer;
+  }
+
+  .switch:hover .switch__track .switch__button {
+    @apply rounded-md bg-minecraft-slate-300/50;
+  }
+
+  .switch:hover .switch__track[data-checked] .switch__button {
+    @apply bg-minecraft-slate-200;
+  }
+
+  .switch:hover .switch__track[data-checked] {
+    @apply border-minecraft-green-100 bg-minecraft-green-200;
+  }
+
+  .switch__track-background {
+    @apply absolute flex h-full w-1/2 select-none items-center justify-center text-white/75 opacity-0 transition-opacity group-data-checked:opacity-100;
+  }
+
+  .switch__track-background+.switch__track-background {
+    @apply right-0 rounded-r border-2 border-l-0 border-minecraft-slate-200/30 text-minecraft-slate-900/50 opacity-100 group-data-checked:opacity-0;
+  }
+
+  /* Dialog Components */
+  .dialog-overlay {
+    @apply fixed inset-0 z-50 flex items-start justify-center bg-black/50 w-full h-full max-h-app-tab;
+  }
+
+  body:has(.dialog-overlay) .app-content {
+    @apply bg-black;
+  }
+
+  body:has(.dialog-overlay,:not(.console-panel--expanded)) .main-content {
+    @apply max-h-app-tab;
+  }
+
+  .dialog {
+    @apply panel max-w-md w-full mx-4 max-h-app-tab overflow-hidden flex flex-col m-10;
+  }
+
+  .dialog__header {
+    @apply panel__header flex items-center justify-between;
+  }
+
+  .dialog__title {
+    @apply panel__title select-none cursor-default;
+  }
+
+  .dialog__close {
+    @apply w-6 h-6 flex items-center justify-center rounded-full text-app-muted hover:text-app-fg hover:bg-app-border transition-colors cursor-pointer leading-none;
+  }
+
+  .dialog__content {
+    @apply panel__body flex-1 overflow-y-auto;
+  }
+
+  .dialog__actions {
+    @apply flex justify-end gap-2 p-4 border-t border-app-border;
+  }
+
+  /* Dialog Options List Styles */
+  .dialog__search {
+    @apply relative mb-4;
+  }
+
+  .dialog__search-icon {
+    @apply absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-app-muted;
+  }
+
+  .dialog__search-input {
+    @apply w-full rounded-md border bg-transparent pl-10 pr-3 py-2 text-sm outline-none focus:ring-2 border-app-border text-app-fg focus:ring-brand-accent focus:border-minecraft-blue-600;
+  }
+
+  .dialog__options-list {
+    @apply space-y-4 max-h-[60vh] overflow-y-auto scrollbar pr-1;
+  }
+
+  .dialog__option-item {
+    @apply p-3 rounded-md border border-app-border bg-app-panel/50 hover:bg-app-panel transition-colors;
+  }
+
+  .dialog__option-label {
+    @apply font-semibold text-sm mb-0.5;
+  }
+
+  .dialog__option-description {
+    @apply text-xs text-app-muted mb-1;
+  }
+
+  .dialog__option-original {
+    @apply text-xs text-brand-accent;
+  }
+
+  .dialog__option-input {
+    @apply w-20 rounded-md border bg-transparent px-2 py-1 text-sm outline-none focus:ring-2 border-app-border text-app-fg focus:ring-brand-accent focus:border-minecraft-blue-600;
+  }
+
+  .dialog__empty-message {
+    @apply text-center text-sm text-app-muted py-8;
+  }
+
+  .dialog__selector {
+    @apply mb-4 border-b border-app-border pb-3;
+  }
+
+  .error-message {
+    @apply p-3 rounded border border-danger-600 bg-danger-600/10 text-danger-600;
+  }
+
+  .protocol-info {
+    @apply space-y-2;
+  }
+
+  .protocol-details {
+    @apply space-y-1 text-sm;
+  }
+
+  .installation-selection {
+    @apply space-y-2;
+  }
+
+  .loading {
+    @apply text-center text-app-muted;
+  }
+
+  /* Modal Components */
+  .modal-backdrop {
+    @apply fixed inset-0 z-[1000] flex items-center justify-center bg-black/50;
+  }
+
+  .modal {
+    @apply panel max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col;
+  }
+
+  .modal__header {
+    @apply panel__header flex items-center justify-between;
+  }
+
+  .modal__title {
+    @apply panel__title;
+  }
+
+  .modal__close-btn {
+    @apply w-8 h-8 flex items-center justify-center rounded text-app-muted hover:text-app-fg hover:bg-app-border transition-colors text-xl leading-none cursor-pointer;
+  }
+
+  .modal__content {
+    @apply panel__body flex-1 overflow-y-auto;
+  }
+
+  /* Installation Instance Modal */
+  .installation-modal {
+    @apply max-w-3xl;
+  }
+
+  .installation-modal__content {
+    @apply space-y-4;
+  }
+
+  .installation-modal__description {
+    @apply text-sm text-app-muted;
+  }
+
+  .installation-modal__controls {
+    @apply flex items-center justify-between border-b pb-3 border-app-border;
+  }
+
+  .installation-modal__count {
+    @apply text-sm text-app-muted;
+  }
+
+  .installation-modal__list {
+    @apply space-y-2 max-h-80 overflow-y-auto;
+  }
+
+  .installation-item {
+    @apply panel cursor-pointer transition-all duration-200 hover:border-brand-accent/50;
+  }
+
+  .installation-item--selected {
+    @apply border-brand-accent bg-brand-accent/5;
+  }
+
+  .installation-item__label {
+    @apply flex items-center gap-3 p-3 cursor-pointer;
+  }
+
+  .installation-item__checkbox {
+    @apply mt-1 cursor-pointer accent-brand-accent;
+  }
+
+  .installation-item__info {
+    @apply flex flex-col items-start flex-1 space-y-1 pl-1 cursor-pointer select-none;
+  }
+
+  .installation-item__name {
+    @apply font-semibold text-sm;
+  }
+
+  .installation-item__path {
+    @apply text-xs text-app-muted font-mono break-all;
+  }
+
+  .installation-item__badge {
+    @apply badge bg-brand-accent-600 text-white text-xs;
+  }
+
+  .installation-item__preset {
+    @apply text-xs text-app-muted;
+  }
+
+  .installation-modal__actions {
+    @apply flex justify-end gap-2 pt-4 border-t border-app-border;
+  }
+
+  /* Sidebar Navigation */
+  .sidebar-nav {
+    @apply flex flex-col h-full bg-app-panel border-r border-app-border w-64;
+  }
+
+  .sidebar-nav__header {
+    @apply px-4 py-3 border-b border-app-border;
+  }
+
+  .sidebar-nav__title {
+    @apply text-xs font-semibold uppercase tracking-wider text-app-muted;
+  }
+
+  .sidebar-nav__content {
+    @apply flex flex-col gap-1 p-2 overflow-y-auto scrollbar max-h-app-tab-expanded;
+    scrollbar-gutter: stable;
+  }
+
+  .sidebar-nav__item {
+    @apply flex items-center gap-3 w-full text-left rounded-md px-3 py-3 text-sm border transition-colors text-app-fg border-transparent bg-transparent hover:bg-app-panel/50;
+  }
+
+  .sidebar-nav__item:hover {
+    @apply border-app-border bg-app-panel/90;
+  }
+
+  .sidebar-nav__item--active {
+    @apply border-brand-accent bg-brand-accent/10 text-minecraft-blue-50;
+  }
+
+  .sidebar-nav__item-icon {
+    @apply flex-shrink-0 text-app-muted;
+  }
+
+  .sidebar-nav__item--active .sidebar-nav__item-icon {
+    @apply text-brand-accent;
+  }
+
+  .sidebar-nav__item-content {
+    @apply flex flex-col gap-0.5 min-w-0 flex-1;
+  }
+
+  .sidebar-nav__item-label {
+    @apply font-medium text-sm;
+  }
+
+  .sidebar-nav__item-description {
+    @apply text-xs text-app-muted leading-tight;
+  }
+
+  .sidebar-nav__item--active .sidebar-nav__item-description {
+    @apply text-minecraft-blue-200;
+  }
+
+  .disclaimer {
+    @apply border-t border-t-app-border/75 mt-auto text-sm min-h-72 h-fit bg-black/25 border-x border-x-minecraft-slate-900;
+  }
+
+  .disclaimer__header {
+    @apply flex items-center justify-between px-2 h-12 border-t border-t-minecraft-slate-900/50 cursor-pointer z-10;
+  }
+
+  .disclaimer.disclaimer--collapsed {
+    @apply h-36 min-h-fit;
+  }
+
+  .disclaimer h2 {
+    @apply text-xs font-semibold uppercase tracking-wider text-app-muted select-none cursor-pointer;
+  }
+
+  .disclaimer p {
+    @apply text-xs h-full text-minecraft-slate-200 mt-2 pb-4 select-none cursor-default px-2 transition-[height] duration-150 ease-out will-change-[height];
+  }
+
+  .disclaimer.disclaimer--collapsed p {
+    @apply h-0;
+  }
+
+  /* App Layout with Sidebar */
+  .app-with-sidebar {
+    @apply flex min-h-screen bg-app-bg text-app-fg;
+  }
+
+  .app-sidebar {
+    @apply flex-shrink-0 border-t border-l border-l-minecraft-slate-500 border-black;
+  }
+
+  .app-main {
+    @apply flex-1 flex flex-col min-w-0;
+  }
+
+  .app-content {
+    @apply flex-1 overflow-hidden border-l border-black;
+  }
+
+  /* Dropzone Overlay */
+  .dropzone-overlay {
+    @apply fixed inset-0 z-50 pointer-events-none transition-opacity duration-300 ease-in-out;
+  }
+
+  .dropzone-overlay--hidden {
+    @apply opacity-0;
+  }
+
+  .dropzone-overlay--active {
+    @apply opacity-100;
+  }
+
+  .dropzone-overlay__glow {
+    @apply absolute inset-0 bg-gradient-to-r from-brand-accent/20 via-brand-accent/10 to-brand-accent/20;
+    box-shadow:
+      inset 0 0 100px 20px rgba(var(--color-brand-accent-rgb), 0.15),
+      inset 0 0 200px 40px rgba(var(--color-brand-accent-rgb), 0.1),
+      inset 0 0 300px 60px rgba(var(--color-brand-accent-rgb), 0.05);
+    backdrop-filter: blur(1px);
+  }
+
+  .dropzone-overlay__content {
+    @apply absolute inset-0 flex flex-col items-center justify-center text-center;
+  }
+
+  .dropzone-overlay__icon {
+    @apply text-brand-accent mb-4 drop-shadow-lg;
+    filter: drop-shadow(0 0 20px rgba(var(--color-brand-accent-rgb), 0.5));
+  }
+
+  .dropzone-overlay__text {
+    @apply text-2xl font-bold text-brand-accent drop-shadow-lg;
+    text-shadow: 0 0 20px rgba(var(--color-brand-accent-rgb), 0.8);
+  }
+
+  /* IOBit Panel Components */
+  .iobit-panel {
+    @apply panel space-y-4;
+  }
+
+  .iobit-header {
+    @apply flex items-center justify-between;
+  }
+
+  .iobit-title {
+    @apply text-lg font-semibold;
+  }
+
+  .iobit-status {
+    @apply badge text-xs font-medium;
+  }
+
+  .iobit-status.found {
+    @apply bg-minecraft-green-600 text-white border-minecraft-green-700;
+  }
+
+  .iobit-status.not-found {
+    @apply bg-minecraft-red-600 text-white border-minecraft-red-700;
+  }
+
+  .iobit-content {
+    @apply space-y-4;
+  }
+
+  .iobit-help {
+    @apply text-sm text-app-muted;
+  }
+
+  .iobit-path-section {
+    @apply space-y-2;
+  }
+
+  .iobit-path-label {
+    @apply text-xs font-semibold;
+  }
+
+  .iobit-path-display {
+    @apply panel__body min-h-10 flex items-center bg-app-panel/50;
+  }
+
+  .iobit-path-text {
+    @apply font-mono text-sm text-app-fg break-all select-all;
+  }
+
+  .iobit-path-empty {
+    @apply text-sm text-app-muted italic;
+  }
+
+  .iobit-actions {
+    @apply flex items-center gap-3;
+  }
+
+  .iobit-button {
+    @apply button;
+  }
+
+  .iobit-button:hover {
+    @apply hover-lift;
+  }
+
+  .iobit-button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+    transform: none;
+  }
+
+  .iobit-button.auto-detect {
+    @apply bg-minecraft-blue-600 text-white border-minecraft-blue-600;
+  }
+
+  .iobit-button.browse {
+    @apply bg-app-panel text-app-fg border-app-border;
+  }
+
+  .iobit-success {
+    @apply p-3 rounded-md border border-minecraft-green-600 bg-minecraft-green-600/10 text-minecraft-green-600;
+  }
+
+  .iobit-success p {
+    @apply text-sm font-medium;
+  }
+
+  .language-select {
+    @apply flex items-center scheme-dark cursor-pointer bg-minecraft-slate-800 text-minecraft-slate-100 rounded-md border border-minecraft-slate-700 p-1 text-sm has-[select:focus]:border-minecraft-blue-600;
+  }
+
+  .language-select select {
+    @apply appearance-none bg-minecraft-slate-800 text-minecraft-slate-100 focus:outline-none w-fit mr-2;
+  }
+
+  .language-select + .language-menu-icon {
+    @apply pointer-events-none relative z-10 -left-8;
+  }
+}

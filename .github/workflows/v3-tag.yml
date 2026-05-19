@@ -1,0 +1,127 @@
+name: Build Tauri App on v3 tag and publish checksums
+
+on:
+  push:
+    tags:
+      - 'v3.*.*'
+  workflow_dispatch:
+
+# Cancel in-progress runs when a new workflow with the same group is triggered
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-tauri-on-tag:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './v3/src-tauri -> target'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        working-directory: ./v3
+        run: bun install
+
+      - name: Cache frontend dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./v3/node_modules
+            ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Build frontend
+        working-directory: ./v3
+        run: bun run build
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./v3
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: brtx-installer-v3
+          path: |
+            ./v3/src-tauri/target/release/bundle/
+          if-no-files-found: warn
+
+      - name: Generate CHECKSUMS.md
+        shell: pwsh
+        run: |
+          $bundleDir = "v3\src-tauri\target\release\bundle"
+          if (-not (Test-Path $bundleDir)) {
+            Write-Error "Bundle directory not found: $bundleDir"
+            exit 1
+          }
+
+          $files = Get-ChildItem -Path $bundleDir -Recurse -File
+          if (-not $files) {
+            Write-Error "No bundle files found under $bundleDir"
+            exit 1
+          }
+
+          $header = @(
+            "# Checksums for $env:GITHUB_REF_NAME"
+            ""
+            "| File | SHA256 |"
+            "|------|--------|"
+          )
+
+          $rows = foreach ($f in $files) {
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $f.FullName).Hash.ToLower()
+            $rel  = $f.FullName.Replace((Get-Location).Path + '\', '')
+            "| $rel | $hash |"
+          }
+
+          $content = $header + $rows
+          Set-Content -Path CHECKSUMS.md -Value ($content -join "`r`n") -NoNewline
+
+      - name: Commit and push CHECKSUMS.md to main
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+
+          if (-not (Test-Path "CHECKSUMS.md")) {
+            Write-Error "CHECKSUMS.md not found in workspace root"
+            exit 1
+          }
+
+          git add CHECKSUMS.md
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "chore(release): add checksums for $env:GITHUB_REF_NAME"
+            git push origin main
+          } else {
+            Write-Host "No changes to commit for CHECKSUMS.md"
+          }

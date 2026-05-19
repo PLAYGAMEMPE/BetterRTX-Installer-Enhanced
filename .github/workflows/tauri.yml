@@ -1,0 +1,68 @@
+name: Build Tauri App
+
+on:
+  push:
+    branches: [ main, 'v3/**' ]
+    paths: [ 'v3/**' ]
+  pull_request:
+    branches: [ main ]
+    paths: [ 'v3/**' ]
+  workflow_dispatch:
+
+# Cancel in-progress runs when a new workflow with the same group is triggered
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-tauri:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './v3/src-tauri -> target'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        working-directory: ./v3
+        run: bun install
+
+      - name: Cache frontend dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./v3/node_modules
+            ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Build frontend
+        working-directory: ./v3
+        run: bun run build
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: ./v3
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: brtx-installer-v3
+          path: |
+            ./v3/src-tauri/target/release/bundle/
+          if-no-files-found: warn
