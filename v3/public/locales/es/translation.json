@@ -193,6 +193,11 @@
   "migration_needed": "Actualizar",
   "migration_needed_tooltip": "Minecraft se actualizó — reinstala el preset para mantener compatibilidad",
 
+  "translator_debug": "Modo traductor (debug)",
+  "language_change_error": "Error al cambiar el idioma",
+  "open_release_page": "Abrir página de la versión en GitHub",
+  "bedrock_graphics_open_error": "Error al abrir bedrock.graphics",
+
   "actions": {
     "dlss": {
       "success": "DLSS instalado correctamente",

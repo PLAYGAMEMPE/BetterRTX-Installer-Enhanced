@@ -99,10 +99,10 @@ function AppHeader({}: AppHeaderProps) {
           <ToolbarSection />
         </div>
 
-        <LanguageSelector 
-          currentLanguage={i18n.language} 
-          onLanguageChange={handleLanguageChange} 
-          translatorDebugLabel={t("translator_debug")} 
+        <LanguageSelector
+          currentLanguage={i18n.resolvedLanguage ?? i18n.language}
+          onLanguageChange={handleLanguageChange}
+          translatorDebugLabel={t("translator_debug")}
         />
       </div>
     </header>

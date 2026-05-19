@@ -161,5 +161,9 @@
   "installation_path": "Installation Path",
   "installation_path_placeholder": "Enter installation path",
   "disclaimer": "Disclaimer",
-  "disclaimer_text": "BetterRTX is not affiliated with, approved, or endorsed by IObit, NVIDIA, Mojang, or Microsoft. The BetterRTX team is not responsible for any problems caused by its dependencies. Modding requires a certain level of technical knowledge and may cause issues with your game or system. Use at your own risk."
+  "disclaimer_text": "BetterRTX is not affiliated with, approved, or endorsed by IObit, NVIDIA, Mojang, or Microsoft. The BetterRTX team is not responsible for any problems caused by its dependencies. Modding requires a certain level of technical knowledge and may cause issues with your game or system. Use at your own risk.",
+  "translator_debug": "Translator (debug)",
+  "language_change_error": "Failed to change language",
+  "open_release_page": "Open release page on GitHub",
+  "bedrock_graphics_open_error": "Failed to launch bedrock.graphics"
 }
