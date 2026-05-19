@@ -1,49 +1,59 @@
-# Better RTX Installer
+# BetterRTX Easy Installer
 
-### Prerequisites
+Aplicación portable para Windows que automatiza la instalación, gestión y
+restauración de **BetterRTX** en Minecraft Bedrock RTX.
 
-- Use software like
-  [MCLauncher](https://github.com/MCMrARM/mc-w10-version-launcher) or
-  [Bedrock Launcher](https://github.com/BedrockLauncher/BedrockLauncher) to
-  easily create a side-loaded Minecraft installation.
-- **OR** download [IOBit Unlocker](https://www.iobit.com/en/iobit-unlocker.php)
-  to allow copying to Minecraft Launcher/Windows Store installations.
+El objetivo es reducir un proceso técnico y propenso a fallos a una experiencia
+**de un clic**, estable y segura, para usuarios sin conocimientos técnicos.
 
-## Launch Installer GUI
-Copy and paste the following line into a command terminal to start the installer. _(English version)_
+> Proyecto personal basado en el instalador oficial de BetterRTX
+> (`BetterRTX-Installer`, v3), bajo licencia GPL-3.0. No está afiliado al
+> proyecto oficial, ni a NVIDIA ni a Mojang.
 
-```
-powershell -c "iwr https://bedrock.graphics/installer -useb | iex"
-```
+## Stack
 
-## Translations
+- **Frontend:** React 18 · TailwindCSS 4 · Zustand · Vite
+- **Backend:** Rust · Tauri 2 · Tokio · Serde
+- **Plataforma:** Windows 10 (1809+) y Windows 11
 
-With help from several [contributors](https://github.com/BetterRTX/BetterRTX-Installer/graphs/contributors), the installer interface has been translated into [multiple languages](https://github.com/BetterRTX/BetterRTX-Installer/tree/prerelease/v2/Localized).
+El código de la aplicación vive en [`v3/`](v3/).
 
-Enter this command in a __64-bit PowerShell__ terminal to launch the installer in your preferred language (if available).
+## Compilar y ejecutar
 
-```powershell
-iwr https://bedrock.graphics/installer/v2/$PsUICulture | iex
-```
+Los scripts de [`scripts/`](scripts/) autodetectan dependencias, validan el
+entorno y escriben logs en `logs/`.
 
----
+| Paso | Comando | Qué hace |
+|---|---|---|
+| 1. Setup | `scripts\setup-env.bat` | Instala Rust (+MSVC), Bun y WebView2; corre `bun install`. |
+| 2. Desarrollo | `scripts\dev.bat` | Lanza Tauri en modo dev (hot-reload de frontend y backend). |
+| 3. Build portable | `scripts\build-portable.bat` | Genera el `.exe` portable en `dist\portable\`. |
+| 4. Build release | `scripts\build-release.bat` | Genera `.exe` + NSIS + MSI + ZIP en `dist\release\`. |
 
-## Help
+Tras `setup-env.bat`, si se instalaron herramientas nuevas en el PATH, cierra y
+reabre la terminal y vuelve a ejecutarlo una vez para completar `bun install`.
 
-![Discord](https://img.shields.io/discord/691547840463241267?style=flat-square&logo=discord&logoColor=%23ffffff&label=Minecraft%20RTX%20Discord)
+## Arquitectura del backend
 
-Join the
-[Minecraft RTX Discord](https://discord.com/invite/minecraft-rtx)
-or
-[open an Issue on GitHub](https://github.com/BetterRTX/BetterRTX-Installer/issues)
-for additional help.
+Estructura modular en [`v3/src-tauri/src/`](v3/src-tauri/src/):
 
-[Read the Wiki](https://github.com/BetterRTX/BetterRTX-Installer/wiki) for more details and instructions.
+| Módulo | Contenido |
+|---|---|
+| `infra/error.rs` | `AppError` tipado → `{ code, message, recoverable, suggestedAction }`. |
+| `infra/logging.rs` | Logging estructurado con `tracing` → `logs/install.log`. |
+| `core/integrity.rs` | Verificación de integridad SHA256. |
+| `core/detection.rs` | Escaneo de capacidades del entorno (`CapabilityReport`). |
+| `core/permissions/` | Sistema adaptativo de permisos: providers `XboxGames`, `Acl`, `Unlocker`, `Staged` + `recovery::Journal`. |
 
----
+## Estado / Roadmap
 
-**[Credits](CREDITS.md) | [Contribute](CONTRIBUTING.md) | [Code of Conduct](CODE_OF_CONDUCT.md) | [Changelogs](CHANGELOGS.md) | [Security Policy](SECURITY.md)**
+- [x] **Fase 0** — Base v3, scripts `.bat`, `AppError`, logging, integridad, módulos.
+- [ ] **Fase 1 (MVP)** — `acquire`/`release` en los providers, motor de instalación
+      híbrido (redirect de `materials.index.json` + fallback de sobrescritura),
+      backup con manifest, restauración a vanilla, UI de progreso.
+- [ ] **Fase 2** — Compatibility engine, recovery mode al arranque, diagnóstico.
+- [ ] **Fase 3** — Migración automática entre versiones, sync, benchmarking.
 
-Licensed under a [GNU GENERAL PUBLIC LICENSE](LICENSE.md)
+## Licencia
 
-**_BetterRTX_ is not affiliated with NVIDIA or Mojang.**
+Distribuido bajo [GNU General Public License v3.0](LICENSE.md).
