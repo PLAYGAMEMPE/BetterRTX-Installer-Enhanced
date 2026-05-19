@@ -71,6 +71,12 @@ if not exist "%APP_DIR%\node_modules\.pnpm" (
 )
 echo   [OK]    Dependencias del frontend listas.
 
+rem ---- Limpiar procesos previos del dev server ---------------
+echo   [..]    Limpiando procesos anteriores si existieran...
+taskkill /F /IM brtx-installer.exe >nul 2>&1
+powershell -NoProfile -Command "try { $p=Get-NetTCPConnection -LocalPort 1420 -EA Stop | Select -Expand OwningProcess -Unique; $p | %{ Stop-Process -Id $_ -Force -EA SilentlyContinue } } catch {}" >nul 2>&1
+timeout /t 1 /nobreak >nul 2>&1
+
 rem ---- Lanzar Tauri dev ---------------------------------------
 echo   [..]    Iniciando Tauri dev con Node 22 LTS y pnpm...
 echo   [..]    (cierra esta ventana para detener)
