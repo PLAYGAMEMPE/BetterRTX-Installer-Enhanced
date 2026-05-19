@@ -1,4 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
@@ -22,6 +23,8 @@ const App: React.FC = () => {
   const [rtpackPath, setRtpackPath] = useState("");
   const [deepLinkDialogOpen, setDeepLinkDialogOpen] = useState(false);
   const [deepLinkUrl, setDeepLinkUrl] = useState("");
+  const [recoveryDialogOpen, setRecoveryDialogOpen] = useState(false);
+  const [recoveryLocation, setRecoveryLocation] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [animateTabs, setAnimateTabs] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
@@ -96,6 +99,16 @@ const App: React.FC = () => {
     return () => {
       unlisten.then((fn) => fn());
     };
+  }, []);
+
+  // Recovery mode: detect interrupted installation on startup
+  useEffect(() => {
+    const unlisten = listen("brtx://recovery-needed", (event) => {
+      const loc = typeof event.payload === 'string' ? event.payload : '';
+      setRecoveryLocation(loc);
+      setRecoveryDialogOpen(true);
+    });
+    return () => { unlisten.then((fn) => fn()); };
   }, []);
 
   // Handle drag-n-drop indicator and file drops
@@ -200,6 +213,43 @@ const App: React.FC = () => {
           deepLinkUrl={deepLinkUrl}
           onClose={handleDeepLinkDialogClose}
         />
+
+        {/* Recovery Dialog */}
+        {recoveryDialogOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-app-panel border border-app-border rounded-xl shadow-2xl p-6 w-96 flex flex-col gap-4">
+              <h2 className="text-base font-semibold select-none">Interrupted Installation Detected</h2>
+              <p className="text-sm opacity-75 select-none">
+                A previous installation was interrupted unexpectedly. You can restore the vanilla backup to return your game to a safe state.
+              </p>
+              {recoveryLocation && (
+                <p className="text-xs font-mono bg-app-bg rounded px-2 py-1 opacity-60 truncate">{recoveryLocation}</p>
+              )}
+              <div className="flex gap-2 justify-end">
+                <button
+                  className="px-4 py-2 text-sm rounded-md border border-app-border hover:bg-app-bg transition-colors"
+                  onClick={() => setRecoveryDialogOpen(false)}
+                >
+                  Dismiss
+                </button>
+                <button
+                  className="px-4 py-2 text-sm rounded-md bg-brand-accent text-white hover:opacity-90 transition-opacity"
+                  onClick={async () => {
+                    try {
+                      await invoke('restore_vanilla', { installLocation: recoveryLocation });
+                    } catch (err) {
+                      console.error('Recovery restore failed:', err);
+                    } finally {
+                      setRecoveryDialogOpen(false);
+                    }
+                  }}
+                >
+                  Restore Backup
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

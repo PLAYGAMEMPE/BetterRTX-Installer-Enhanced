@@ -1697,6 +1697,10 @@ async fn install_preset(
         }};
     }
 
+    // Bandera de instalacion activa: permite detectar crash al reiniciar.
+    let recovery_flag = brtx_dir().join(".brtx-installing");
+    let _ = std::fs::write(&recovery_flag, &install_location);
+
     // 1. Escanear y planificar.
     progress!(1, "Calculando plan de instalacion...");
     let cap = detection::scan_capabilities(&install_location);
@@ -1769,13 +1773,28 @@ async fn install_preset(
         ("RTXPostFX.Tonemapping.material.bin", tone_path.as_path()),
         ("RTXPostFX.Bloom.material.bin", bloom_path.as_path()),
     ];
-    let install_result = installer::execute(installer::InstallParams {
-        materials_dir: &materials_dir,
-        backup_dir: &backup_dir,
-        preset_files: &preset_files,
-        plan: &plan,
-        journal: &mut journal,
-    });
+    let install_result: Result<(), infra::error::AppError> = if plan.provider == "UnlockerProvider" {
+        // IOBit Unlocker path: delega en la infraestructura existente de copia con unlocker.
+        let mats = vec![stub_path.clone(), tone_path.clone(), bloom_path.clone()];
+        let dummy = PackInfo {
+            uuid: preset.uuid.clone(),
+            name: preset.name.clone(),
+            stub: String::new(),
+            tonemapping: String::new(),
+            bloom: String::new(),
+        };
+        copy_shader_files_async(&app, &install_location, &mats, &dummy)
+            .await
+            .map_err(|e| infra::error::AppError::Other(e))
+    } else {
+        installer::execute(installer::InstallParams {
+            materials_dir: &materials_dir,
+            backup_dir: &backup_dir,
+            preset_files: &preset_files,
+            plan: &plan,
+            journal: &mut journal,
+        })
+    };
 
     // 7. Liberar permisos (siempre, aunque la instalacion falle).
     progress!(7, "Restaurando permisos originales...");
@@ -1791,9 +1810,24 @@ async fn install_preset(
     if let Err(e) = install_result {
         let reason = e.message();
         let _ = app.emit("install://rollback", serde_json::json!({ "reason": reason }));
+        let _ = std::fs::remove_file(&recovery_flag);
         return Err(reason);
     }
     journal.close();
+
+    // Verificar integridad post-instalacion (no aplica a la ruta UnlockerProvider).
+    if plan.provider != "UnlockerProvider" {
+        for (filename, src) in &preset_files {
+            let installed = materials_dir.join(filename);
+            if installed.exists() {
+                if let Ok(src_hash) = app_core::integrity::sha256_file(src) {
+                    if let Err(e) = app_core::integrity::verify_file(&installed, &src_hash) {
+                        log_ev!("warn", format!("Integridad post-install dudosa en {filename}: {}", e.message()));
+                    }
+                }
+            }
+        }
+    }
 
     // 8. Guardar seguimiento y finalizar.
     progress!(8, "Finalizando...");
@@ -1807,7 +1841,22 @@ async fn install_preset(
         log_ev!("warn", format!("No se pudo guardar seguimiento del preset: {e}"));
     }
     log_ev!("info", format!("Preset '{}' instalado exitosamente", preset.name));
+    let _ = std::fs::remove_file(&recovery_flag);
     Ok(())
+}
+
+/// Genera un informe de diagnostico completo del estado de una instalacion.
+#[tauri::command]
+fn run_diagnostics(install_location: String) -> app_core::diagnostics::DiagnosticsReport {
+    tracing::info!("Ejecutando diagnostico para: {install_location}");
+    app_core::diagnostics::run(&install_location)
+}
+
+/// Verifica si una instalacion puede recibir un preset antes de instalar.
+#[tauri::command]
+fn check_compatibility(install_location: String) -> app_core::compatibility::CompatReport {
+    tracing::info!("Verificando compatibilidad de: {install_location}");
+    app_core::compatibility::check(&install_location)
 }
 
 /// Escanea las capacidades del entorno para una instalacion de Minecraft:
@@ -1844,6 +1893,15 @@ pub fn run() {
             // BetterRTX Easy Installer: logging estructurado a logs/install.log
             infra::logging::init(brtx_dir().join("logs"));
             tracing::info!("BetterRTX Easy Installer iniciado");
+
+            // Recovery mode: detectar instalacion interrumpida por crash.
+            let recovery_flag = brtx_dir().join(".brtx-installing");
+            if recovery_flag.exists() {
+                if let Ok(loc) = std::fs::read_to_string(&recovery_flag) {
+                    tracing::warn!("Instalacion interrumpida detectada: {}", loc.trim());
+                    let _ = app.emit("brtx://recovery-needed", loc.trim().to_string());
+                }
+            }
 
             // Handle command line arguments for file associations and deep links
             let args: Vec<String> = std::env::args().collect();
@@ -1896,6 +1954,8 @@ pub fn run() {
             install_preset,
             list_backups,
             restore_vanilla,
+            run_diagnostics,
+            check_compatibility,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -4,6 +4,7 @@ import { useAppStore } from "../../store/appStore";
 import { usePresetsStore } from "../../store/presetsStore";
 import InstallationInstanceModal from "../installations/InstallationInstanceModal";
 import { useState, useMemo } from "react";
+import InstallProgress from "./InstallProgress";
 
 export default function PresetsTab() {
   const { t } = useTranslation();
@@ -15,6 +16,7 @@ export default function PresetsTab() {
     installingPresets,
     installModalOpen,
     installModalPresetUuid,
+    installProgress,
     handlePresetSelection,
     openInstallModal,
     closeInstallModal,
@@ -76,6 +78,7 @@ export default function PresetsTab() {
 
   return (
     <section className="presets-container">
+      <InstallProgress progress={installProgress} />
       <div className="section-toolbar flex justify-between items-center mb-4">
         <div className="toolbar-title">
           <h2 className="text-lg font-semibold select-none cursor-default">{t("presets_title")}</h2>
