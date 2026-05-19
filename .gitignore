@@ -16,3 +16,6 @@ output*
 
 random-tangents/*
 log.txt
+# BetterRTX Easy Installer build output
+/logs/
+/dist/
