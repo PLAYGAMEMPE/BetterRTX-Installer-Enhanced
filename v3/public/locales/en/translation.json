@@ -167,6 +167,9 @@
   "open_release_page": "Open release page on GitHub",
   "bedrock_graphics_open_error": "Failed to launch bedrock.graphics",
 
+  "view_on_bedrock_graphics": "View on bedrock.graphics",
+  "toggle_details": "Toggle details",
+
   "search_presets": "Search presets...",
   "filter_select": "Select a version",
   "filter_any_version": "Any Version",
