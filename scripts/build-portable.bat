@@ -1,8 +1,9 @@
 @echo off
 rem ============================================================
 rem  BetterRTX Easy Installer - Build portable (.exe)
-rem  Compila frontend + backend y genera el ejecutable portable.
-rem  Gestor de dependencias: pnpm v11+ con Node 22 LTS.
+rem  Compila en modo release y copia el ejecutable portable a
+rem  dist\portable\. No genera instaladores (NSIS/MSI).
+rem  Requisito previo: scripts\setup-env.bat ejecutado una vez.
 rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
 title BetterRTX Easy Installer - Build portable
@@ -13,6 +14,7 @@ set "APP_DIR=%ROOT_DIR%\v3"
 set "LOG_DIR=%ROOT_DIR%\logs"
 set "DIST_DIR=%ROOT_DIR%\dist\portable"
 set "TARGET_DIR=%APP_DIR%\src-tauri\target\release"
+set "APP_EXE=brtx-installer.exe"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" >nul 2>&1
 set "LOG=%LOG_DIR%\build-portable.log"
 
@@ -26,39 +28,61 @@ echo(
 
 rem ---- Validar Rust/Cargo -------------------------------------
 set "CARGO_BIN=%USERPROFILE%\.cargo\bin"
-if exist "%CARGO_BIN%\cargo.exe" set "PATH=%CARGO_BIN%;%PATH%"
+set "CARGO_EXE="
 where cargo >nul 2>&1
-if errorlevel 1 (
-  echo   [ERROR] Rust/Cargo no encontrado. Ejecuta primero: scripts\setup-env.bat
+if not errorlevel 1 (
+  set "CARGO_EXE=cargo"
+) else if exist "%CARGO_BIN%\cargo.exe" (
+  set "PATH=%CARGO_BIN%;!PATH!"
+  set "CARGO_EXE=cargo"
+)
+if not defined CARGO_EXE (
+  echo   [ERROR] Rust/Cargo no encontrado.
+  echo   Ejecuta primero:  scripts\setup-env.bat
   endlocal & exit /b 1
 )
 
 rem ---- Validar pnpm -------------------------------------------
 set "PNPM_EXE="
 where pnpm >nul 2>&1
-if not errorlevel 1 set "PNPM_EXE=pnpm"
-if not defined PNPM_EXE if exist "%APPDATA%\npm\pnpm.cmd" set "PNPM_EXE=%APPDATA%\npm\pnpm.cmd"
+if not errorlevel 1 (
+  set "PNPM_EXE=pnpm"
+) else (
+  for %%P in (
+    "%APPDATA%\npm\pnpm.cmd"
+    "%LOCALAPPDATA%\pnpm\pnpm.cmd"
+  ) do (
+    if exist "%%~P" set "PNPM_EXE=%%~P"
+  )
+)
 if not defined PNPM_EXE (
-  echo   [ERROR] pnpm no encontrado. Ejecuta primero: scripts\setup-env.bat
+  echo   [ERROR] pnpm no encontrado.
+  echo   Ejecuta primero:  scripts\setup-env.bat
   endlocal & exit /b 1
 )
+
 for /f "tokens=*" %%V in ('"%PNPM_EXE%" --version 2^>nul') do set "PNPM_VER=%%V"
 echo   [OK]    Rust y pnpm v!PNPM_VER! detectados.
 
-rem ---- Dependencias -------------------------------------------
-if not exist "%APP_DIR%\node_modules\.pnpm" (
-  echo   [..]    Instalando dependencias del frontend...
-  pushd "%APP_DIR%"
-  "%PNPM_EXE%" install >> "%LOG%" 2>&1
-  if errorlevel 1 (
-    echo   [ERROR] Fallo 'pnpm install'. Revisa %LOG%
-    popd & endlocal & exit /b 1
-  )
-  popd
+rem ---- Sincronizar dependencias del frontend ------------------
+echo   [..]    Sincronizando dependencias del frontend...
+pushd "%APP_DIR%"
+"%PNPM_EXE%" install --frozen-lockfile >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo   [ERROR] Fallo 'pnpm install'. Revisa %LOG%
+  popd & endlocal & exit /b 1
 )
+popd
+echo   [OK]    Dependencias listas.
 
-rem ---- Compilar -----------------------------------------------
-echo   [..]    Compilando en modo release (esto puede tardar)...
+rem ---- Pre-descarga de crates de Rust -------------------------
+echo   [..]    Verificando crates de Rust (cargo fetch)...
+pushd "%APP_DIR%\src-tauri"
+cargo fetch >> "%LOG%" 2>&1
+popd
+
+rem ---- Compilar release ---------------------------------------
+echo   [..]    Compilando en modo release (puede tardar varios minutos)...
 pushd "%APP_DIR%"
 "%PNPM_EXE%" tauri build >> "%LOG%" 2>&1
 set "RC=%ERRORLEVEL%"
@@ -69,23 +93,24 @@ if not "%RC%"=="0" (
 )
 echo   [OK]    Compilacion completada.
 
-rem ---- Recolectar el ejecutable portable ----------------------
+rem ---- Copiar el ejecutable portable --------------------------
 if not exist "%DIST_DIR%" mkdir "%DIST_DIR%" >nul 2>&1
-set "FOUND_EXE="
-for %%F in ("%TARGET_DIR%\*.exe") do (
-  copy /Y "%%F" "%DIST_DIR%\" >nul
-  set "FOUND_EXE=%%~nxF"
-)
-if not defined FOUND_EXE (
-  echo   [ERROR] No se encontro el .exe en %TARGET_DIR%
-  >> "%LOG%" echo [ERROR] .exe no encontrado en %TARGET_DIR%
+if not exist "%TARGET_DIR%\%APP_EXE%" (
+  echo   [ERROR] No se encontro el ejecutable: %TARGET_DIR%\%APP_EXE%
+  >> "%LOG%" echo [ERROR] Ejecutable no encontrado: %TARGET_DIR%\%APP_EXE%
   endlocal & exit /b 1
 )
+copy /Y "%TARGET_DIR%\%APP_EXE%" "%DIST_DIR%\" >nul
 
->> "%LOG%" echo [%DATE% %TIME%] Build portable OK: %FOUND_EXE%
+rem ---- Mostrar resultado --------------------------------------
+for %%F in ("%DIST_DIR%\%APP_EXE%") do set "EXE_SIZE=%%~zF"
+set /a EXE_MB=!EXE_SIZE! / 1048576
+
+>> "%LOG%" echo [%DATE% %TIME%] Build portable OK: %APP_EXE% (!EXE_MB! MB)
 echo(
 echo ==================================================
 echo   BUILD PORTABLE COMPLETADO
-echo   Ejecutable: %DIST_DIR%\%FOUND_EXE%
+echo   Ejecutable : %DIST_DIR%\%APP_EXE%
+echo   Tamano     : !EXE_MB! MB
 echo ==================================================
 endlocal & exit /b 0

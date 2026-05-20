@@ -2,7 +2,7 @@
 rem ============================================================
 rem  BetterRTX Easy Installer - Modo desarrollo (Tauri dev)
 rem  Lanza frontend (Vite) + backend (Rust) con hot-reload.
-rem  Gestor de dependencias: pnpm v11+ con Node 22 LTS (aislado).
+rem  Requisito previo: scripts\setup-env.bat ejecutado una vez.
 rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
 title BetterRTX Easy Installer - Dev
@@ -26,10 +26,15 @@ rem ---- Validar Rust/Cargo -------------------------------------
 set "CARGO_BIN=%USERPROFILE%\.cargo\bin"
 set "CARGO_EXE="
 where cargo >nul 2>&1
-if not errorlevel 1 set "CARGO_EXE=cargo"
-if not defined CARGO_EXE if exist "%CARGO_BIN%\cargo.exe" set "PATH=%CARGO_BIN%;%PATH%" & set "CARGO_EXE=cargo"
+if not errorlevel 1 (
+  set "CARGO_EXE=cargo"
+) else if exist "%CARGO_BIN%\cargo.exe" (
+  set "PATH=%CARGO_BIN%;!PATH!"
+  set "CARGO_EXE=cargo"
+)
 if not defined CARGO_EXE (
-  echo   [ERROR] Rust/Cargo no encontrado. Ejecuta primero: scripts\setup-env.bat
+  echo   [ERROR] Rust/Cargo no encontrado.
+  echo   Ejecuta primero:  scripts\setup-env.bat
   >> "%LOG%" echo [ERROR] Cargo no encontrado.
   endlocal & exit /b 1
 )
@@ -37,49 +42,49 @@ if not defined CARGO_EXE (
 rem ---- Validar pnpm -------------------------------------------
 set "PNPM_EXE="
 where pnpm >nul 2>&1
-if not errorlevel 1 set "PNPM_EXE=pnpm"
-if not defined PNPM_EXE if exist "%APPDATA%\npm\pnpm.cmd" set "PNPM_EXE=%APPDATA%\npm\pnpm.cmd"
+if not errorlevel 1 (
+  set "PNPM_EXE=pnpm"
+) else (
+  for %%P in (
+    "%APPDATA%\npm\pnpm.cmd"
+    "%LOCALAPPDATA%\pnpm\pnpm.cmd"
+  ) do (
+    if exist "%%~P" set "PNPM_EXE=%%~P"
+  )
+)
 if not defined PNPM_EXE (
-  echo   [ERROR] pnpm no encontrado. Ejecuta primero: scripts\setup-env.bat
-  echo   [ERROR] O instala manualmente: npm install -g pnpm@11
+  echo   [ERROR] pnpm no encontrado.
+  echo   Ejecuta primero:  scripts\setup-env.bat
   >> "%LOG%" echo [ERROR] pnpm no encontrado.
   endlocal & exit /b 1
 )
 
-rem ---- Verificar version de pnpm ------------------------------
 for /f "tokens=*" %%V in ('"%PNPM_EXE%" --version 2^>nul') do set "PNPM_VER=%%V"
 echo   [OK]    Rust y pnpm v!PNPM_VER! detectados.
 >> "%LOG%" echo [INFO] pnpm version: !PNPM_VER!
 
-rem ---- Sincronizar Rust (previene version mismatch) -----------
-echo   [..]    Sincronizando dependencias de Rust...
-pushd "%APP_DIR%\src-tauri"
-cargo update >> "%LOG%" 2>&1
-popd
-echo   [OK]    Dependencias de Rust sincronizadas.
-
-rem ---- Dependencias del frontend (pnpm install) ---------------
-if not exist "%APP_DIR%\node_modules\.pnpm" (
-  echo   [..]    Instalando dependencias del frontend con pnpm...
-  pushd "%APP_DIR%"
-  "%PNPM_EXE%" install >> "%LOG%" 2>&1
-  if errorlevel 1 (
-    echo   [ERROR] Fallo 'pnpm install'. Revisa %LOG%
-    popd & endlocal & exit /b 1
-  )
-  popd
+rem ---- Sincronizar dependencias del frontend ------------------
+rem  pnpm install es instantaneo si nada cambio; necesario si
+rem  pnpm-lock.yaml se actualizo (ej. tras git pull).
+echo   [..]    Sincronizando dependencias del frontend...
+pushd "%APP_DIR%"
+"%PNPM_EXE%" install >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo   [ERROR] Fallo 'pnpm install'. Revisa %LOG%
+  popd & endlocal & exit /b 1
 )
+popd
 echo   [OK]    Dependencias del frontend listas.
 
-rem ---- Limpiar procesos previos del dev server ---------------
+rem ---- Limpiar procesos previos del dev server ----------------
 echo   [..]    Limpiando procesos anteriores si existieran...
 taskkill /F /IM brtx-installer.exe >nul 2>&1
-powershell -NoProfile -Command "try { $p=Get-NetTCPConnection -LocalPort 1420 -EA Stop | Select -Expand OwningProcess -Unique; $p | %{ Stop-Process -Id $_ -Force -EA SilentlyContinue } } catch {}" >nul 2>&1
-timeout /t 1 /nobreak >nul 2>&1
+powershell -NoProfile -Command "try { $p=Get-NetTCPConnection -LocalPort 1420 -EA Stop | Select -Expand OwningProcess -Unique; $p | %%{ Stop-Process -Id $_ -Force -EA SilentlyContinue } } catch {}" >nul 2>&1
+timeout /t 1 /nobreak >nul
 
 rem ---- Lanzar Tauri dev ---------------------------------------
-echo   [..]    Iniciando Tauri dev con Node 22 LTS y pnpm...
-echo   [..]    (cierra esta ventana para detener)
+echo   [..]    Iniciando Tauri dev (Vite + Rust hot-reload)...
+echo   [..]    Cierra esta ventana para detener el servidor.
 echo(
 pushd "%APP_DIR%"
 "%PNPM_EXE%" tauri dev

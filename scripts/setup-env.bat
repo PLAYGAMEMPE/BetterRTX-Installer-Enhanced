@@ -1,8 +1,14 @@
 @echo off
 rem ============================================================
 rem  BetterRTX Easy Installer - Setup del entorno de desarrollo
-rem  Instala: Rust (+MSVC), pnpm v11+, Node 22 LTS, WebView2.
-rem  Compatible con Windows 10 (1809+) y Windows 11.
+rem  Instala: Node.js LTS, pnpm v11, Rust (MSVC), VS Build
+rem  Tools, WebView2. Compatible con Windows 10 (1809+) / 11.
+rem
+rem  EJECUCION: Como usuario normal. UAC se solicita si es
+rem  necesario al instalar paquetes via winget.
+rem
+rem  Si se instalan herramientas nuevas, el script indicara
+rem  que debes abrir una terminal nueva y volver a ejecutarlo.
 rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
 title BetterRTX Easy Installer - Setup de entorno
@@ -26,151 +32,289 @@ echo   Raiz del proyecto : %ROOT_DIR%
 echo   Log detallado     : %LOG%
 echo(
 
-rem ---- Requisito: winget --------------------------------------
+rem ================================================================
+rem  1. winget (gestor de paquetes de Windows)
+rem ================================================================
 where winget >nul 2>&1
 if errorlevel 1 (
   call :err "winget no esta disponible en este sistema."
-  call :err "Instala 'App Installer' desde Microsoft Store y vuelve a ejecutar este script."
+  echo(
+  echo   Para instalarlo abre Microsoft Store y busca "App Installer"
+  echo   o descargalo desde: https://aka.ms/getwinget
+  echo   Luego cierra y vuelve a ejecutar este script.
   goto :summary
 )
 call :ok "winget detectado."
 
-rem ---- Rust + Cargo -------------------------------------------
-set "CARGO_BIN=%USERPROFILE%\.cargo\bin"
-where rustc >nul 2>&1
+rem ================================================================
+rem  2. Node.js LTS  (necesario para instalar pnpm via npm)
+rem ================================================================
+set "NODE_EXE="
+set "NPM_EXE="
+
+rem -- Buscar node en PATH actual
+where node >nul 2>&1
 if not errorlevel 1 (
-  call :ok "Rust ya instalado y disponible en PATH."
-) else if exist "%CARGO_BIN%\rustc.exe" (
-  call :ok "Rust instalado en %CARGO_BIN% (reabre la terminal para usarlo)."
-  set "RESTART_NEEDED=1"
-) else (
-  call :info "Instalando Rust (rustup)..."
-  winget install --id Rustlang.Rustup -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
-  if exist "%CARGO_BIN%\rustc.exe" (
-    call :ok "Rust instalado correctamente."
-    set "RESTART_NEEDED=1"
-  ) else (
-    call :err "No se pudo instalar Rust. Instalalo manualmente desde https://rustup.rs"
+  set "NODE_EXE=node"
+  set "NPM_EXE=npm"
+)
+
+rem -- Buscar en rutas conocidas (winget instala en ProgramFiles sin tocar la sesion actual)
+if not defined NODE_EXE (
+  for %%P in (
+    "%ProgramFiles%\nodejs"
+    "%ProgramFiles(x86)%\nodejs"
+    "%LOCALAPPDATA%\Programs\nodejs"
+  ) do (
+    if exist "%%~P\node.exe" (
+      set "PATH=%%~P;!PATH!"
+      set "NODE_EXE=node"
+      set "NPM_EXE=npm"
+    )
   )
 )
 
-rem ---- Toolchain MSVC -----------------------------------------
+if defined NODE_EXE (
+  for /f "tokens=*" %%V in ('node --version 2^>nul') do call :ok "Node.js %%V detectado."
+) else (
+  call :info "Instalando Node.js LTS via winget..."
+  winget install --id OpenJS.NodeJS.LTS -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
+  rem Intentar agregar al PATH de la sesion actual tras la instalacion
+  for %%P in (
+    "%ProgramFiles%\nodejs"
+    "%ProgramFiles(x86)%\nodejs"
+    "%LOCALAPPDATA%\Programs\nodejs"
+  ) do (
+    if exist "%%~P\node.exe" (
+      set "PATH=%%~P;!PATH!"
+      set "NODE_EXE=node"
+      set "NPM_EXE=npm"
+    )
+  )
+  if defined NODE_EXE (
+    for /f "tokens=*" %%V in ('node --version 2^>nul') do call :ok "Node.js %%V instalado."
+  ) else (
+    call :err "No se pudo instalar Node.js. Instala manualmente: https://nodejs.org"
+    set "RESTART_NEEDED=1"
+  )
+)
+
+rem ================================================================
+rem  3. pnpm v11  (gestor de dependencias del proyecto)
+rem ================================================================
+set "PNPM_EXE="
+
+where pnpm >nul 2>&1
+if not errorlevel 1 (
+  set "PNPM_EXE=pnpm"
+) else (
+  rem Buscar en rutas conocidas de instalacion global
+  for %%P in (
+    "%APPDATA%\npm\pnpm.cmd"
+    "%LOCALAPPDATA%\pnpm\pnpm.cmd"
+  ) do (
+    if exist "%%~P" set "PNPM_EXE=%%~P"
+  )
+)
+
+if defined PNPM_EXE (
+  for /f "tokens=*" %%V in ('"%PNPM_EXE%" --version 2^>nul') do call :ok "pnpm v%%V detectado."
+) else if defined NPM_EXE (
+  call :info "Instalando pnpm v11 via npm..."
+  npm install -g pnpm@11 >> "%LOG%" 2>&1
+  if errorlevel 1 (
+    call :err "Fallo 'npm install -g pnpm@11'. Revisa %LOG%"
+    set "RESTART_NEEDED=1"
+  ) else (
+    where pnpm >nul 2>&1
+    if not errorlevel 1 (
+      set "PNPM_EXE=pnpm"
+    ) else (
+      for %%P in (
+        "%APPDATA%\npm\pnpm.cmd"
+        "%LOCALAPPDATA%\pnpm\pnpm.cmd"
+      ) do (
+        if exist "%%~P" set "PNPM_EXE=%%~P"
+      )
+    )
+    if defined PNPM_EXE (
+      for /f "tokens=*" %%V in ('"%PNPM_EXE%" --version 2^>nul') do call :ok "pnpm v%%V instalado."
+    ) else (
+      call :err "pnpm instalado pero no encontrado en PATH. Reabre la terminal y vuelve a ejecutar."
+      set "RESTART_NEEDED=1"
+    )
+  )
+) else (
+  call :err "pnpm no instalable: Node.js no esta disponible en esta sesion."
+  call :info "Reabre la terminal tras la instalacion de Node.js y vuelve a ejecutar este script."
+  set "RESTART_NEEDED=1"
+)
+
+rem ================================================================
+rem  4. Rust + Cargo
+rem ================================================================
+set "CARGO_BIN=%USERPROFILE%\.cargo\bin"
+set "CARGO_EXE="
+
+where cargo >nul 2>&1
+if not errorlevel 1 (
+  set "CARGO_EXE=cargo"
+  call :ok "Rust/Cargo detectado en PATH."
+) else if exist "%CARGO_BIN%\cargo.exe" (
+  set "PATH=%CARGO_BIN%;!PATH!"
+  set "CARGO_EXE=cargo"
+  call :ok "Rust detectado en %CARGO_BIN% (PATH actualizado para esta sesion)."
+) else (
+  call :info "Instalando Rust (rustup)... puede tardar varios minutos."
+  winget install --id Rustlang.Rustup -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
+  if exist "%CARGO_BIN%\cargo.exe" (
+    set "PATH=%CARGO_BIN%;!PATH!"
+    set "CARGO_EXE=cargo"
+    call :ok "Rust instalado correctamente."
+  ) else (
+    call :err "No se pudo instalar Rust. Instala manualmente: https://rustup.rs"
+    set "RESTART_NEEDED=1"
+  )
+)
+
+rem ================================================================
+rem  5. Toolchain Rust MSVC (requerido para compilar en Windows)
+rem ================================================================
+if defined CARGO_EXE (
+  if exist "%CARGO_BIN%\rustup.exe" (
+    call :info "Configurando toolchain stable-msvc (requerido en Windows)..."
+    "%CARGO_BIN%\rustup.exe" default stable-msvc >> "%LOG%" 2>&1
+    "%CARGO_BIN%\rustup.exe" target add x86_64-pc-windows-msvc >> "%LOG%" 2>&1
+    call :ok "Toolchain stable-msvc configurado."
+  )
+)
+
+rem ================================================================
+rem  6. VS Build Tools con workload C++ (linker MSVC para Rust)
+rem ================================================================
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "HAS_MSVC=0"
 if exist "%VSWHERE%" (
-  for /f "usebackq delims=" %%P in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul`) do set "HAS_MSVC=1"
+  for /f "usebackq delims=" %%Q in (
+    `"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul`
+  ) do (
+    if not "%%Q"=="" set "HAS_MSVC=1"
+  )
 )
 if "!HAS_MSVC!"=="1" (
-  call :ok "VS Build Tools (C++/MSVC) detectado."
+  call :ok "VS Build Tools con workload C++ detectado."
 ) else (
-  call :info "Instalando VS Build Tools con workload C++ (~2-3 GB)..."
+  call :info "Instalando VS Build Tools con workload C++ (~2-4 GB, 5-15 min)..."
   winget install --id Microsoft.VisualStudio.2022.BuildTools -e --silent --accept-source-agreements --accept-package-agreements --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" >> "%LOG%" 2>&1
   if errorlevel 1 (
     call :err "No se pudo instalar VS Build Tools automaticamente."
-    call :err "Instala manualmente 'Build Tools for Visual Studio 2022' con el workload 'Desktop development with C++'."
+    call :err "Instala manualmente 'Build Tools for Visual Studio 2022' con workload 'Desktop development with C++'."
+    call :err "Descarga: https://visualstudio.microsoft.com/visual-cpp-build-tools/"
   ) else (
     call :ok "VS Build Tools instalado."
-  )
-)
-
-rem ---- Node.js (requerido para pnpm) --------------------------
-set "NODE_EXE="
-where node >nul 2>&1
-if not errorlevel 1 set "NODE_EXE=node"
-if not defined NODE_EXE (
-  call :info "Instalando Node.js LTS (necesario para pnpm)..."
-  winget install --id OpenJS.NodeJS.LTS -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
-  where node >nul 2>&1
-  if not errorlevel 1 (
-    call :ok "Node.js instalado correctamente."
     set "RESTART_NEEDED=1"
-  ) else (
-    call :err "No se pudo instalar Node.js. Instalalo desde https://nodejs.org"
-  )
-) else (
-  for /f "tokens=*" %%V in ('node --version 2^>nul') do call :ok "Node.js %%V detectado."
-)
-
-rem ---- pnpm v11+ (gestor de dependencias del proyecto) --------
-set "PNPM_EXE="
-where pnpm >nul 2>&1
-if not errorlevel 1 set "PNPM_EXE=pnpm"
-if not defined PNPM_EXE if exist "%APPDATA%\npm\pnpm.cmd" set "PNPM_EXE=%APPDATA%\npm\pnpm.cmd"
-if not defined PNPM_EXE (
-  call :info "Instalando pnpm v11+ via npm..."
-  npm install -g pnpm@11 >> "%LOG%" 2>&1
-  where pnpm >nul 2>&1
-  if not errorlevel 1 (
-    set "PNPM_EXE=pnpm"
-    call :ok "pnpm instalado correctamente."
-    set "RESTART_NEEDED=1"
-  ) else (
-    call :err "No se pudo instalar pnpm. Ejecuta manualmente: npm install -g pnpm@11"
-  )
-) else (
-  for /f "tokens=*" %%V in ('"%PNPM_EXE%" --version 2^>nul') do call :ok "pnpm v%%V detectado."
-)
-
-rem ---- Node 22 LTS local (aislado via pnpm env) ---------------
-if defined PNPM_EXE (
-  call :info "Descargando Node 22 LTS aislado para este proyecto (no afecta al Node global)..."
-  "%PNPM_EXE%" env use 22 --global >> "%LOG%" 2>&1
-  if not errorlevel 1 (
-    call :ok "Node 22 LTS configurado via pnpm env (aislado del sistema)."
-    call :info "Nota: el .npmrc del proyecto apunta a Node 22.22.3 para reproducibilidad."
-  ) else (
-    call :info "pnpm env: descarga de Node 22 no disponible en esta sesion. El .nvmrc/.node-version lo gestionara."
   )
 )
 
-rem ---- WebView2 Runtime ---------------------------------------
+rem ================================================================
+rem  7. WebView2 Runtime  (motor de renderizado del frontend)
+rem ================================================================
 call :info "Verificando WebView2 Runtime..."
 winget install --id Microsoft.EdgeWebView2Runtime -e --silent --accept-source-agreements --accept-package-agreements >> "%LOG%" 2>&1
 call :ok "WebView2 Runtime verificado."
 
-rem ---- Dependencias del frontend (pnpm install) ---------------
-if defined PNPM_EXE (
-  if exist "%APP_DIR%\package.json" (
-    call :info "Instalando dependencias del frontend con pnpm..."
-    pushd "%APP_DIR%"
-    "%PNPM_EXE%" install >> "%LOG%" 2>&1
-    if errorlevel 1 (
-      call :err "Fallo 'pnpm install'. Revisa el log."
+rem ================================================================
+rem  8. Dependencias del frontend  (pnpm install)
+rem     Solo si no se requiere reiniciar (tools en PATH actual)
+rem ================================================================
+if "!RESTART_NEEDED!"=="0" (
+  if defined PNPM_EXE (
+    if exist "%APP_DIR%\package.json" (
+      call :info "Instalando dependencias del frontend con pnpm..."
+      call :info "(pnpm descargara Node 22 LTS automaticamente segun .npmrc del proyecto)"
+      pushd "%APP_DIR%"
+      "%PNPM_EXE%" install >> "%LOG%" 2>&1
+      if errorlevel 1 (
+        call :err "Fallo 'pnpm install'. Revisa el log en: %LOG%"
+        popd
+      ) else (
+        call :ok "Dependencias del frontend instaladas."
+        popd
+      )
     ) else (
-      call :ok "Dependencias instaladas con pnpm (lockfile verificado)."
+      call :err "No se encontro %APP_DIR%\package.json"
+      call :err "Asegurate de clonar el repositorio completo antes de ejecutar setup."
     )
-    popd
   ) else (
-    call :err "No se encontro %APP_DIR%\package.json"
+    call :info "pnpm no disponible; ejecuta 'pnpm install' en v3/ al reabrir la terminal."
   )
 ) else (
-  call :info "pnpm no disponible en esta sesion; ejecuta 'pnpm install' en v3/ al reabrir."
+  call :info "Se omite 'pnpm install': hay herramientas nuevas que requieren nueva terminal."
 )
 
+rem ================================================================
+rem  9. Pre-descarga de crates de Rust  (cargo fetch)
+rem     Acelera el primer 'cargo build' sin compilar nada aun.
+rem ================================================================
+if "!RESTART_NEEDED!"=="0" (
+  if defined CARGO_EXE (
+    if exist "%APP_DIR%\src-tauri\Cargo.toml" (
+      call :info "Pre-descargando crates de Rust (cargo fetch)..."
+      pushd "%APP_DIR%\src-tauri"
+      cargo fetch >> "%LOG%" 2>&1
+      if errorlevel 1 (
+        call :info "cargo fetch tuvo advertencias (no critico). Revisa %LOG%"
+      ) else (
+        call :ok "Crates de Rust descargados (cargo fetch OK)."
+      )
+      popd
+    )
+  )
+) else (
+  call :info "Se omite 'cargo fetch': reabre la terminal y vuelve a ejecutar este script."
+)
+
+rem ================================================================
+rem  Resumen final
+rem ================================================================
 :summary
 echo(
 echo ==================================================
->> "%LOG%" echo [%DATE% %TIME%] Setup finalizado con !ERRORS! error(es).
+>> "%LOG%" echo [%DATE% %TIME%] Setup finalizado. Errores: !ERRORS!. RESTART_NEEDED: !RESTART_NEEDED!
+
 if !ERRORS! gtr 0 (
-  echo   SETUP INCOMPLETO  -  !ERRORS! error^(es^).
-  echo   Revisa el detalle en: %LOG%
+  echo   SETUP INCOMPLETO  -  !ERRORS! error^(es^). Revisa: %LOG%
+  if not defined CARGO_EXE echo   Falta Rust:  https://rustup.rs
+  if not defined PNPM_EXE  echo   Falta pnpm:  npm install -g pnpm@11
+  if "!HAS_MSVC!"=="0" (
+    echo   Falta VS Build Tools:
+    echo   https://visualstudio.microsoft.com/visual-cpp-build-tools/
+  )
   echo ==================================================
   endlocal & exit /b 1
 )
-if "%RESTART_NEEDED%"=="1" (
-  echo   SETUP CASI LISTO.
-  echo   Se instalaron herramientas nuevas en el PATH.
-  echo   1^) Cierra esta terminal.
-  echo   2^) Abre una nueva.
-  echo   3^) Ejecuta de nuevo: scripts\setup-env.bat
+
+if "!RESTART_NEEDED!"=="1" (
+  echo   SETUP CASI LISTO
+  echo   Se instalaron herramientas que requieren nueva terminal.
+  echo(
+  echo   PASOS:
+  echo   1) Cierra esta ventana completamente.
+  echo   2) Abre una nueva terminal (cmd o PowerShell).
+  echo   3) Vuelve a ejecutar:  scripts\setup-env.bat
   echo ==================================================
   endlocal & exit /b 0
 )
-echo   ENTORNO LISTO. Ya puedes ejecutar: scripts\dev.bat
+
+echo   ENTORNO LISTO
+echo   Ejecuta:  scripts\dev.bat          (modo desarrollo)
+echo   Ejecuta:  scripts\build-portable.bat  (compilar)
 echo ==================================================
 endlocal & exit /b 0
 
-rem ---------------- subrutinas de log --------------------------
+rem ================================================================
+rem  Subrutinas de log
+rem ================================================================
 :ok
 echo   [OK]    %~1
 >> "%LOG%" echo [%TIME%] [OK]    %~1
