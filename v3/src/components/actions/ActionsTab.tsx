@@ -279,13 +279,13 @@ export default function ActionsTab() {
           </div>
           {diagReport && (
             <div className="text-xs bg-app-bg border border-app-border rounded-md p-3 space-y-1 max-h-52 overflow-y-auto">
-              <div className="flex justify-between"><span className="opacity-60">Kind</span><span>{diagReport.installKind}</span></div>
-              <div className="flex justify-between"><span className="opacity-60">Provider</span><span>{diagReport.recommendedProvider}</span></div>
-              <div className="flex justify-between"><span className="opacity-60">Writable</span><span>{diagReport.directlyWritable ? "Yes" : "No"}</span></div>
-              <div className="flex justify-between"><span className="opacity-60">Index JSON</span><span>{diagReport.indexJsonPresent ? (diagReport.indexJsonValid ? "Valid" : "Invalid") : "Missing"}</span></div>
-              <div className="flex justify-between"><span className="opacity-60">Redirect active</span><span>{diagReport.betterrtxRedirectActive ? "Yes" : "No"}</span></div>
-              <div className="flex justify-between"><span className="opacity-60">RTX files</span><span>{diagReport.rtxFilesPresent.length}/3</span></div>
-              <div className="flex justify-between"><span className="opacity-60">Backups</span><span>{diagReport.backupCount}</span></div>
+              <div className="flex justify-between"><span className="opacity-60">{t("diag_kind")}</span><span>{diagReport.installKind}</span></div>
+              <div className="flex justify-between"><span className="opacity-60">{t("diag_provider")}</span><span>{diagReport.recommendedProvider}</span></div>
+              <div className="flex justify-between"><span className="opacity-60">{t("diag_writable")}</span><span>{diagReport.directlyWritable ? t("diag_yes") : t("diag_no")}</span></div>
+              <div className="flex justify-between"><span className="opacity-60">{t("diag_index_json")}</span><span>{diagReport.indexJsonPresent ? (diagReport.indexJsonValid ? t("diag_valid") : t("diag_invalid")) : t("diag_missing")}</span></div>
+              <div className="flex justify-between"><span className="opacity-60">{t("diag_redirect_active")}</span><span>{diagReport.betterrtxRedirectActive ? t("diag_yes") : t("diag_no")}</span></div>
+              <div className="flex justify-between"><span className="opacity-60">{t("diag_rtx_files")}</span><span>{diagReport.rtxFilesPresent.length}/3</span></div>
+              <div className="flex justify-between"><span className="opacity-60">{t("diag_backups")}</span><span>{diagReport.backupCount}</span></div>
               {diagReport.notes.length > 0 && (
                 <div className="pt-1 border-t border-app-border">
                   {diagReport.notes.map((n) => <p key={n} className="opacity-75">{n}</p>)}
@@ -327,7 +327,7 @@ export default function ActionsTab() {
                   <div className="flex items-center justify-between mb-0.5">
                     <span className="font-mono opacity-60">{new Date(ev.timestamp).toLocaleString()}</span>
                     {ev.possiblyBrtxRelated && (
-                      <span className="text-yellow-400 font-medium">Possibly BetterRTX related</span>
+                      <span className="text-yellow-400 font-medium">{t("diag_possibly_brtx")}</span>
                     )}
                   </div>
                   <p className="opacity-75 truncate">{ev.message}</p>

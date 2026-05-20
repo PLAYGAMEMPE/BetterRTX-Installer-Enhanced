@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import Button from "../ui/Button";
 import {
   detectGpu,
@@ -19,6 +20,7 @@ const TIER_COLOR: Record<string, string> = {
 };
 
 export default function BenchmarkPanel() {
+  const { t } = useTranslation();
   const { presets } = useAppStore();
   const [gpu, setGpu] = useState<GpuInfo | null>(null);
   const [estimate, setEstimate] = useState<FpsEstimate | null>(null);
@@ -61,7 +63,7 @@ export default function BenchmarkPanel() {
   };
 
   if (loading) {
-    return <p className="text-sm opacity-60 py-2">Detecting GPU…</p>;
+    return <p className="text-sm opacity-60 py-2">{t("bench_detecting_gpu")}</p>;
   }
 
   return (
@@ -70,7 +72,7 @@ export default function BenchmarkPanel() {
       {gpu && (
         <div className="flex items-center justify-between text-sm bg-app-bg border border-app-border rounded-md px-3 py-2">
           <div>
-            <p className="font-medium">{gpu.name || "Unknown GPU"}</p>
+            <p className="font-medium">{gpu.name || t("bench_unknown_gpu")}</p>
             <p className="text-xs opacity-60">{gpu.tierLabel}{gpu.vramMb ? ` · ${gpu.vramMb} MB VRAM` : ""}</p>
           </div>
           {estimate && estimate.minFps > 0 && (
@@ -78,7 +80,7 @@ export default function BenchmarkPanel() {
               <p className={`font-semibold ${TIER_COLOR[estimate.tier]}`}>
                 {estimate.minFps}–{estimate.maxFps} FPS
               </p>
-              <p className="text-xs opacity-60">RTX estimate</p>
+              <p className="text-xs opacity-60">{t("bench_rtx_estimate")}</p>
             </div>
           )}
         </div>
@@ -89,14 +91,14 @@ export default function BenchmarkPanel() {
 
       {/* Record FPS form */}
       <div className="border border-app-border rounded-md p-3 flex flex-col gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide opacity-60">Record your FPS</p>
+        <p className="text-xs font-semibold uppercase tracking-wide opacity-60">{t("bench_record_fps")}</p>
         <div className="flex gap-2">
           <select
             value={selectedPreset}
             onChange={(e) => setSelectedPreset(e.target.value)}
             className="flex-1 px-2 py-1.5 text-sm bg-app-panel border border-app-border rounded-md focus:outline-none focus:ring-1 focus:ring-brand-accent"
           >
-            <option value="">Preset…</option>
+            <option value="">{t("bench_preset_placeholder")}</option>
             {presets.map((p) => (
               <option key={p.uuid} value={p.uuid}>{p.name}</option>
             ))}
@@ -112,7 +114,7 @@ export default function BenchmarkPanel() {
           />
           <input
             type="text"
-            placeholder="MC version"
+            placeholder={t("bench_mc_version")}
             value={mcVersion}
             onChange={(e) => setMcVersion(e.target.value)}
             className="w-28 px-2 py-1.5 text-sm bg-app-panel border border-app-border rounded-md focus:outline-none focus:ring-1 focus:ring-brand-accent"
@@ -123,7 +125,7 @@ export default function BenchmarkPanel() {
             disabled={!selectedPreset || !fpsInput || saving}
             onClick={handleRecord}
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("bench_saving") : t("bench_save")}
           </Button>
         </div>
       </div>
@@ -131,7 +133,7 @@ export default function BenchmarkPanel() {
       {/* Saved entries */}
       {entries.length > 0 && (
         <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-          <p className="text-xs font-semibold uppercase tracking-wide opacity-60">Recorded benchmarks</p>
+          <p className="text-xs font-semibold uppercase tracking-wide opacity-60">{t("bench_recorded")}</p>
           {entries.map((e) => (
             <div
               key={`${e.presetUuid}-${e.recordedAt}`}

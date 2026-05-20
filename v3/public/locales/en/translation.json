@@ -165,5 +165,96 @@
   "translator_debug": "Translator (debug)",
   "language_change_error": "Failed to change language",
   "open_release_page": "Open release page on GitHub",
-  "bedrock_graphics_open_error": "Failed to launch bedrock.graphics"
+  "bedrock_graphics_open_error": "Failed to launch bedrock.graphics",
+
+  "search_presets": "Search presets...",
+  "filter_select": "Select a version",
+  "filter_any_version": "Any Version",
+  "filter_v14": "BetterRTX 1.4",
+  "filter_v13": "BetterRTX 1.3",
+  "filter_v12": "BetterRTX 1.2",
+  "presets_none_match_filter": "No presets match your search criteria",
+  "clear_filters": "Clear filters",
+
+  "console_output": "Console Output",
+  "console_no_output": "No output yet...",
+  "console_clear": "Clear",
+
+  "drop_rtpack": "Drop .rtpack file to install",
+
+  "bench_detecting_gpu": "Detecting GPU…",
+  "bench_unknown_gpu": "Unknown GPU",
+  "bench_rtx_estimate": "RTX estimate",
+  "bench_record_fps": "Record your FPS",
+  "bench_preset_placeholder": "Preset…",
+  "bench_mc_version": "MC version",
+  "bench_saving": "Saving…",
+  "bench_save": "Save",
+  "bench_recorded": "Recorded benchmarks",
+
+  "diag_kind": "Kind",
+  "diag_provider": "Provider",
+  "diag_writable": "Writable",
+  "diag_index_json": "Index JSON",
+  "diag_redirect_active": "Redirect active",
+  "diag_rtx_files": "RTX files",
+  "diag_backups": "Backups",
+  "diag_valid": "Valid",
+  "diag_invalid": "Invalid",
+  "diag_missing": "Missing",
+  "diag_yes": "Yes",
+  "diag_no": "No",
+  "diag_possibly_brtx": "Possibly BetterRTX related",
+
+  "action_restore_vanilla_title": "Restore Vanilla Materials",
+  "action_restore_vanilla_desc": "Roll back RTX files to their original Minecraft state using the last verified backup.",
+  "restore": "Restore",
+  "restore_to_selected": "Restore selected ({{count}})",
+  "restoring": "Restoring...",
+
+  "action_diagnostics_title": "Diagnostics",
+  "diag_select_install": "Select installation…",
+  "diag_running": "Running…",
+  "diag_run": "Run",
+
+  "action_crash_analyzer_title": "Crash Analyzer",
+  "action_crash_analyzer_desc": "Scan Windows Event Log for Minecraft crashes and correlate with BetterRTX installations.",
+  "analyzing": "Analyzing…",
+  "analyze": "Analyze",
+  "crash_none_found": "No Minecraft crashes found in the last 7 days.",
+
+  "action_benchmarks_title": "Benchmarks & FPS Estimator",
+
+  "dialog_restore_title": "Restore Vanilla",
+  "dialog_restore_desc": "Select which Minecraft instances to restore to vanilla materials",
+
+  "action_graphics_options_title": "Graphics Options Editor",
+  "action_graphics_options_desc": "Edit Minecraft graphics settings directly from options.txt",
+  "edit_options": "Edit Options",
+
+  "migration_needed": "Update",
+  "migration_needed_tooltip": "Minecraft updated — reinstall the preset to maintain compatibility",
+
+  "actions": {
+    "dlss": {
+      "success": "DLSS installed successfully",
+      "error": "Failed to install DLSS: {{error}}"
+    },
+    "update": {
+      "success": "Options updated successfully",
+      "error": "Failed to update options: {{error}}"
+    },
+    "backup": {
+      "success": "Backups completed successfully",
+      "error": "Failed to create backups: {{error}}"
+    },
+    "uninstall": {
+      "success": "RTX uninstalled successfully",
+      "error": "Failed to uninstall RTX: {{error}}"
+    },
+    "restore": {
+      "success": "Vanilla materials restored successfully",
+      "error": "Failed to restore materials: {{error}}"
+    }
+  }
 }

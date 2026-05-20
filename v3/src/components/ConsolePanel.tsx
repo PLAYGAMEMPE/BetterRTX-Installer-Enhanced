@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import { ChevronDown } from "lucide-react";
 import { cx } from "classix";
+import { useTranslation } from "react-i18next";
 
 interface ConsolePanelProps {
   isExpanded: boolean;
@@ -15,6 +16,7 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
   output = [],
   onClear,
 }) => {
+  const { t } = useTranslation();
   const outputRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new output is added
@@ -39,7 +41,7 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
         onClick={handleToggle}
       >
         <h3 className="m-0 text-sm font-semibold text-app-fg">
-          Console Output
+          {t("console_output")}
         </h3>
         <span className="console-arrow transition-transform duration-200">
           <ChevronDown 
@@ -63,7 +65,7 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
           ref={outputRef}
           className="console-output"
         >
-          {output.length > 0 ? output.join("\n") : "No output yet..."}
+          {output.length > 0 ? output.join("\n") : t("console_no_output")}
 
           <button
             className={cx(
@@ -72,7 +74,7 @@ export const ConsolePanel: React.FC<ConsolePanelProps> = ({
             )}
             onClick={handleClear}
           >
-            Clear
+            {t("console_clear")}
           </button>
         </div>
       </div>

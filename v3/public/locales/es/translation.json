@@ -198,6 +198,45 @@
   "open_release_page": "Abrir página de la versión en GitHub",
   "bedrock_graphics_open_error": "Error al abrir bedrock.graphics",
 
+  "search_presets": "Buscar presets...",
+  "filter_select": "Seleccionar versión",
+  "filter_any_version": "Cualquier versión",
+  "filter_v14": "BetterRTX 1.4",
+  "filter_v13": "BetterRTX 1.3",
+  "filter_v12": "BetterRTX 1.2",
+  "presets_none_match_filter": "Ningún preset coincide con tu búsqueda",
+  "clear_filters": "Limpiar filtros",
+
+  "console_output": "Salida de consola",
+  "console_no_output": "Sin salida aún...",
+  "console_clear": "Limpiar",
+
+  "drop_rtpack": "Suelta el archivo .rtpack para instalar",
+
+  "bench_detecting_gpu": "Detectando GPU…",
+  "bench_unknown_gpu": "GPU desconocida",
+  "bench_rtx_estimate": "Estimación RTX",
+  "bench_record_fps": "Registrar tus FPS",
+  "bench_preset_placeholder": "Preset…",
+  "bench_mc_version": "Versión MC",
+  "bench_saving": "Guardando…",
+  "bench_save": "Guardar",
+  "bench_recorded": "Benchmarks guardados",
+
+  "diag_kind": "Tipo",
+  "diag_provider": "Proveedor",
+  "diag_writable": "Escribible",
+  "diag_index_json": "Index JSON",
+  "diag_redirect_active": "Redireccionamiento activo",
+  "diag_rtx_files": "Archivos RTX",
+  "diag_backups": "Copias de seguridad",
+  "diag_valid": "Válido",
+  "diag_invalid": "Inválido",
+  "diag_missing": "No encontrado",
+  "diag_yes": "Sí",
+  "diag_no": "No",
+  "diag_possibly_brtx": "Posiblemente relacionado con BetterRTX",
+
   "actions": {
     "dlss": {
       "success": "DLSS instalado correctamente",
