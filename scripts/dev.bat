@@ -66,14 +66,14 @@ echo   [OK]    Rust y pnpm v!PNPM_VER! detectados.
 rem ---- Sincronizar dependencias del frontend ------------------
 rem  pnpm install es instantaneo si nada cambio; necesario si
 rem  pnpm-lock.yaml se actualizo (ej. tras git pull).
+rem  Se usa --dir porque pushd no es respetado por el shim de pnpm.
+  Se usa call porque pnpm es un .cmd y sin call el bat no retorna.
 echo   [..]    Sincronizando dependencias del frontend...
-pushd "%APP_DIR%"
-"%PNPM_EXE%" install >> "%LOG%" 2>&1
+call "%PNPM_EXE%" --dir "%APP_DIR%" install >> "%LOG%" 2>&1
 if errorlevel 1 (
   echo   [ERROR] Fallo 'pnpm install'. Revisa %LOG%
-  popd & endlocal & exit /b 1
+  endlocal & exit /b 1
 )
-popd
 echo   [OK]    Dependencias del frontend listas.
 
 rem ---- Limpiar procesos previos del dev server ----------------
@@ -86,10 +86,8 @@ rem ---- Lanzar Tauri dev ---------------------------------------
 echo   [..]    Iniciando Tauri dev (Vite + Rust hot-reload)...
 echo   [..]    Cierra esta ventana para detener el servidor.
 echo(
-pushd "%APP_DIR%"
-"%PNPM_EXE%" tauri dev
+call "%PNPM_EXE%" --dir "%APP_DIR%" tauri dev
 set "RC=%ERRORLEVEL%"
-popd
 
 >> "%LOG%" echo [%DATE% %TIME%] Tauri dev finalizo con codigo %RC%.
 if not "%RC%"=="0" (

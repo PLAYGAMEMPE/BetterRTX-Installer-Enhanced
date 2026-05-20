@@ -67,13 +67,11 @@ echo   [OK]    Rust y pnpm v!PNPM_VER! detectados.
 
 rem ---- Sincronizar dependencias del frontend ------------------
 echo   [..]    Sincronizando dependencias del frontend...
-pushd "%APP_DIR%"
-"%PNPM_EXE%" install --frozen-lockfile >> "%LOG%" 2>&1
+call "%PNPM_EXE%" --dir "%APP_DIR%" install --frozen-lockfile >> "%LOG%" 2>&1
 if errorlevel 1 (
   echo   [ERROR] Fallo 'pnpm install'. Revisa %LOG%
-  popd & endlocal & exit /b 1
+  endlocal & exit /b 1
 )
-popd
 echo   [OK]    Dependencias listas.
 
 rem ---- Pre-descarga de crates de Rust -------------------------
@@ -88,10 +86,8 @@ mkdir "%DIST_DIR%" >nul 2>&1
 
 rem ---- Compilar release ---------------------------------------
 echo   [..]    Compilando release de produccion (puede tardar varios minutos)...
-pushd "%APP_DIR%"
-"%PNPM_EXE%" tauri build >> "%LOG%" 2>&1
+call "%PNPM_EXE%" --dir "%APP_DIR%" tauri build >> "%LOG%" 2>&1
 set "RC=%ERRORLEVEL%"
-popd
 if not "%RC%"=="0" (
   echo   [ERROR] La compilacion fallo con codigo %RC%. Revisa %LOG%
   endlocal & exit /b %RC%

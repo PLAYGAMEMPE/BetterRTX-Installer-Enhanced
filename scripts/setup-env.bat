@@ -121,7 +121,7 @@ if defined PNPM_EXE (
   for /f "tokens=*" %%V in ('"%PNPM_EXE%" --version 2^>nul') do call :ok "pnpm v%%V detectado."
 ) else if defined NPM_EXE (
   call :info "Instalando pnpm v11 via npm..."
-  npm install -g pnpm@11 >> "%LOG%" 2>&1
+  call npm install -g pnpm@11 >> "%LOG%" 2>&1
   if errorlevel 1 (
     call :err "Fallo 'npm install -g pnpm@11'. Revisa %LOG%"
     set "RESTART_NEEDED=1"
@@ -232,14 +232,11 @@ if "!RESTART_NEEDED!"=="0" (
     if exist "%APP_DIR%\package.json" (
       call :info "Instalando dependencias del frontend con pnpm..."
       call :info "(pnpm descargara Node 22 LTS automaticamente segun .npmrc del proyecto)"
-      pushd "%APP_DIR%"
-      "%PNPM_EXE%" install >> "%LOG%" 2>&1
+      call "%PNPM_EXE%" --dir "%APP_DIR%" install >> "%LOG%" 2>&1
       if errorlevel 1 (
         call :err "Fallo 'pnpm install'. Revisa el log en: %LOG%"
-        popd
       ) else (
         call :ok "Dependencias del frontend instaladas."
-        popd
       )
     ) else (
       call :err "No se encontro %APP_DIR%\package.json"
