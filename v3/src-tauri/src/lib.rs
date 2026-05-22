@@ -168,16 +168,60 @@ fn get_iobit_path_cached() -> Option<PathBuf> {
     get_iobit_unlocker_exe()
 }
 
+/// Retorna la versión de IObit Unlocker desde el registro de Windows.
+fn get_iobit_version(exe_path: &Path) -> Option<String> {
+    let _ = exe_path; // path used as fallback key; registry is the source of truth
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    // Inno Setup registra bajo Uninstall con sufijo _is1
+    for subkey in [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\IObit Unlocker_is1",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\IObit Unlocker_is1",
+        r"SOFTWARE\IObit\IObit Unlocker",
+        r"SOFTWARE\WOW6432Node\IObit\IObit Unlocker",
+    ] {
+        if let Ok(key) = hklm.open_subkey(subkey) {
+            for field in ["DisplayVersion", "Version"] {
+                if let Ok(v) = key.get_value::<String, _>(field) {
+                    if !v.is_empty() {
+                        return Some(v);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn get_iobit_unlocker_exe() -> Option<PathBuf> {
-    // First check if user has set a custom path
+    // 1. Ruta personalizada guardada por el usuario
     if let Some(custom_path) = get_custom_iobit_path() {
         return Some(custom_path);
     }
 
-    // Try common install locations
+    // 2. Registro de Windows (más fiable tras instalación)
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    for subkey in [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\IObit Unlocker_is1",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\IObit Unlocker_is1",
+        r"SOFTWARE\IObit\IObit Unlocker",
+        r"SOFTWARE\WOW6432Node\IObit\IObit Unlocker",
+    ] {
+        if let Ok(key) = hklm.open_subkey(subkey) {
+            for field in ["InstallLocation", "InstallPath"] {
+                if let Ok(dir) = key.get_value::<String, _>(field) {
+                    let exe = PathBuf::from(&dir).join("IObitUnlocker.exe");
+                    if exe.exists() {
+                        return Some(exe);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Rutas conocidas predeterminadas
     let candidates = [
-        r"C:\\Program Files (x86)\\IObit\\IObit Unlocker\\IObitUnlocker.exe",
-        r"C:\\Program Files\\IObit\\IObit Unlocker\\IObitUnlocker.exe",
+        r"C:\Program Files (x86)\IObit\IObit Unlocker\IObitUnlocker.exe",
+        r"C:\Program Files\IObit\IObit Unlocker\IObitUnlocker.exe",
     ];
     for c in candidates { if Path::new(c).exists() { return Some(PathBuf::from(c)); } }
 
@@ -1210,6 +1254,128 @@ async fn save_minecraft_options(options_path: String, gfx_options: HashMap<Strin
     Ok(())
 }
 
+/// Estado completo de IObit Unlocker devuelto al frontend.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+struct IoBitStatus {
+    installed: bool,
+    path: Option<String>,
+    version: Option<String>,
+}
+
+/// Devuelve el estado actual de IObit Unlocker (instalado, ruta y versión).
+#[tauri::command]
+fn get_iobit_status() -> IoBitStatus {
+    if let Some(path) = get_iobit_path_cached() {
+        let version = get_iobit_version(&path);
+        IoBitStatus {
+            installed: true,
+            path: Some(path.to_string_lossy().to_string()),
+            version,
+        }
+    } else {
+        IoBitStatus { installed: false, path: None, version: None }
+    }
+}
+
+/// Descarga IObit Unlocker desde la CDN oficial e instala silenciosamente.
+///
+/// Flujo:
+///  1. Verifica si ya está instalado (retorna inmediatamente si sí).
+///  2. Descarga el instalador desde `cdn.iobit.com`.
+///  3. Verifica tamaño mínimo (integridad básica).
+///  4. Lanza el instalador con `/S` y elevación UAC vía PowerShell.
+///  5. Re-detecta la ruta y la guarda en la config.
+#[tauri::command]
+async fn install_iobit_auto() -> Result<IoBitStatus, String> {
+    // Paso 1 — ya instalado
+    if let Some(path) = get_iobit_path_cached() {
+        let version = get_iobit_version(&path);
+        return Ok(IoBitStatus {
+            installed: true,
+            path: Some(path.to_string_lossy().to_string()),
+            version,
+        });
+    }
+
+    // Paso 2 — descargar instalador oficial
+    const DOWNLOAD_URL: &str = "https://cdn.iobit.com/dl/iobit-unlocker-setup.exe";
+    const MIN_BYTES: usize = 3_000_000; // 3 MB mínimo como validación básica
+
+    let tmp = std::env::temp_dir().join("brtx-iobit-setup.exe");
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(180))
+        .user_agent("BetterRTX-Installer/3.0")
+        .build()
+        .map_err(|e| format!("Error al crear cliente HTTP: {e}"))?;
+
+    let resp = client.get(DOWNLOAD_URL).send().await
+        .map_err(|e| format!("Error de descarga: {e}"))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Descarga fallida (HTTP {}). Verifica tu conexión.", resp.status()));
+    }
+
+    let bytes = resp.bytes().await
+        .map_err(|e| format!("Error al leer descarga: {e}"))?;
+
+    if bytes.len() < MIN_BYTES {
+        return Err(format!(
+            "Archivo descargado demasiado pequeño ({} KB). Puede estar corrupto o la CDN no respondió correctamente.",
+            bytes.len() / 1024
+        ));
+    }
+
+    tokio::fs::write(&tmp, &bytes).await
+        .map_err(|e| format!("Error al guardar instalador: {e}"))?;
+
+    // Paso 3 — instalar silenciosamente con elevación UAC
+    let tmp_clone = tmp.clone();
+    let install_result = tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let arg = tmp_clone.to_string_lossy().replace('\'', "''");
+        let ps = format!(
+            "Start-Process -FilePath '{}' -ArgumentList '/S' -Verb RunAs -Wait",
+            arg
+        );
+        let status = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+            .status()
+            .map_err(|e| format!("Error al lanzar instalador: {e}"))?;
+
+        if !status.success() {
+            return Err(format!(
+                "El instalador terminó con código {:?}. Asegúrate de aceptar el prompt de UAC.",
+                status.code()
+            ));
+        }
+        // Pausa para que Windows registre la instalación
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Error interno de tarea: {e}"))?;
+
+    // Limpiar instalador temporal siempre
+    let _ = tokio::fs::remove_file(&tmp).await;
+
+    install_result?;
+
+    // Paso 4 — re-detectar y guardar ruta
+    if let Some(found) = get_iobit_unlocker_exe() {
+        let config_file = brtx_dir().join("iobit_path.txt");
+        let _ = fs::write(&config_file, found.to_string_lossy().as_ref());
+        let version = get_iobit_version(&found);
+        Ok(IoBitStatus {
+            installed: true,
+            path: Some(found.to_string_lossy().to_string()),
+            version,
+        })
+    } else {
+        Err("Instalación completada pero no se encontró el ejecutable. Usa 'Detección automática'.".into())
+    }
+}
+
 #[tauri::command]
 fn set_iobit_path(path: String) -> Result<String, String> {
     let path_buf = PathBuf::from(&path);
@@ -1997,6 +2163,8 @@ pub fn run() {
             register_brtx_protocol,
             is_brtx_protocol_registered,
             check_iobit_unlocker,
+            get_iobit_status,
+            install_iobit_auto,
             get_minecraft_options,
             save_minecraft_options,
             set_iobit_path,
