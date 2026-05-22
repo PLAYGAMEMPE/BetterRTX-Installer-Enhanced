@@ -10,7 +10,7 @@ export default function Button({
   ...rest
 }: {
   children: React.ReactNode;
-  theme?: "primary" | "secondary" | null;
+  theme?: "primary" | "secondary" | "danger" | null;
   size?: "sm" | "md" | "lg" | null;
   disabled?: boolean;
   block?: boolean;
@@ -23,6 +23,7 @@ export default function Button({
         "btn",
         theme === "primary" && "btn--primary",
         theme === "secondary" && "btn--secondary",
+        theme === "danger" && "btn--danger",
         size === "sm" && "btn--sm",
         size === "md" && "btn--md",
         size === "lg" && "btn--lg",

@@ -2,8 +2,10 @@ import { useTranslation } from "react-i18next";
 import { useAppStore } from "../../store/appStore";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { cx } from "classix";
 import Button from "../ui/Button";
-import { CheckCircle, AlertCircle, Download } from "lucide-react";
+import { CheckCircle, AlertCircle } from "lucide-react";
 
 interface IoBitStatus {
     installed: boolean;
@@ -11,7 +13,25 @@ interface IoBitStatus {
     version: string | null;
 }
 
-type InstallPhase = "idle" | "downloading" | "installing" | "error";
+interface IoBitProgress {
+    stage: string;
+    percent: number | null;
+    label: string;
+}
+
+type InstallPhase =
+    | "idle"
+    | "resolving"
+    | "downloading"
+    | "saving"
+    | "installing"
+    | "detecting"
+    | "uninstalling"
+    | "error";
+
+const ACTIVE_PHASES = new Set<InstallPhase>([
+    "resolving", "downloading", "saving", "installing", "detecting", "uninstalling",
+]);
 
 export default function IoBitPanel() {
     const { t } = useTranslation();
@@ -21,10 +41,15 @@ export default function IoBitPanel() {
     const [phase, setPhase] = useState<InstallPhase>("idle");
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [version, setVersion] = useState<string | null>(null);
+    const [progressPercent, setProgressPercent] = useState<number | null>(null);
+    const [progressLabel, setProgressLabel] = useState<string>("");
 
     const isFound = iobitPath !== null && iobitPath !== "";
+    const isActive = ACTIVE_PHASES.has(phase);
+    const canInstall = !isFound && !isActive;
+    const canUninstall = isFound && !isActive;
 
-    // Load full status on mount (includes version)
+    // Cargar estado completo al montar
     useEffect(() => {
         invoke<IoBitStatus>("get_iobit_status")
             .then((s) => {
@@ -33,6 +58,17 @@ export default function IoBitPanel() {
             })
             .catch(console.error);
     }, [setIobitPath]);
+
+    // Suscribirse a eventos de progreso del backend
+    useEffect(() => {
+        const unlisten = listen<IoBitProgress>("iobit-progress", (event) => {
+            const { stage, percent, label } = event.payload;
+            setPhase(stage as InstallPhase);
+            setProgressPercent(percent ?? null);
+            setProgressLabel(label);
+        });
+        return () => { unlisten.then((f) => f()); };
+    }, []);
 
     const handleAutoDetect = async () => {
         setIsLoading(true);
@@ -60,13 +96,11 @@ export default function IoBitPanel() {
 
     const handleInstallAuto = async () => {
         setErrorMsg(null);
-        setPhase("downloading");
+        setProgressPercent(null);
+        setProgressLabel("");
+        setPhase("resolving");
         try {
-            // The command downloads (~7 MB) then runs the silent installer.
-            // We switch phase label mid-way using a short timer heuristic.
-            const timer = setTimeout(() => setPhase("installing"), 8_000);
             const status = await invoke<IoBitStatus>("install_iobit_auto");
-            clearTimeout(timer);
             setIobitPath(status.path ?? null);
             setVersion(status.version ?? null);
             setPhase("idle");
@@ -76,11 +110,30 @@ export default function IoBitPanel() {
         }
     };
 
-    const isInstalling = phase === "downloading" || phase === "installing";
+    const handleUninstall = async () => {
+        setErrorMsg(null);
+        setProgressPercent(null);
+        setProgressLabel("");
+        setPhase("uninstalling");
+        try {
+            const status = await invoke<IoBitStatus>("uninstall_iobit");
+            setIobitPath(status.path ?? null);
+            setVersion(status.version ?? null);
+            setPhase("idle");
+        } catch (err) {
+            setErrorMsg(String(err));
+            setPhase("error");
+        }
+    };
 
     const phaseLabel = () => {
-        if (phase === "downloading") return t("iobit_downloading");
-        if (phase === "installing") return t("iobit_installing");
+        if (progressLabel) return progressLabel;
+        if (phase === "resolving")    return t("iobit_resolving");
+        if (phase === "downloading")  return t("iobit_downloading");
+        if (phase === "saving")       return t("iobit_saving");
+        if (phase === "installing")   return t("iobit_installing");
+        if (phase === "detecting")    return t("iobit_detecting");
+        if (phase === "uninstalling") return t("iobit_uninstalling");
         return t("iobit_install_auto");
     };
 
@@ -127,26 +180,56 @@ export default function IoBitPanel() {
                             <p className="text-xs text-red-400 mb-2 leading-snug">{errorMsg}</p>
                         )}
 
+                        {/* Progress bar — visible during any active phase */}
+                        {isActive && (
+                            <div className="iobit-progress mb-3">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs text-app-muted truncate pr-2">
+                                        {phaseLabel()}
+                                    </span>
+                                    {progressPercent !== null && (
+                                        <span className="text-xs text-app-muted shrink-0">
+                                            {progressPercent}%
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="iobit-progress-track">
+                                    <div
+                                        className={cx(
+                                            "iobit-progress-fill",
+                                            progressPercent === null && "iobit-progress-fill--indeterminate"
+                                        )}
+                                        style={
+                                            progressPercent !== null
+                                                ? { width: `${progressPercent}%` }
+                                                : undefined
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {/* Action buttons */}
-                        <div className="iobit-actions flex flex-wrap gap-2">
-                            {/* Auto-install: only shown when not found */}
-                            {!isFound && (
+                        <div className="iobit-actions flex flex-col gap-2">
+                            {/* Auto-install: sólo cuando no está instalado y no hay operación activa */}
+                            {canInstall && (
                                 <Button
                                     theme="primary"
                                     size="sm"
+                                    block
                                     onClick={handleInstallAuto}
-                                    disabled={isInstalling || isLoading}
+                                    disabled={isLoading}
                                 >
-                                    <Download size={14} className="mr-1" />
-                                    {phaseLabel()}
+                                    {t("iobit_install_auto")}
                                 </Button>
                             )}
 
                             <Button
                                 theme={isFound ? "primary" : "secondary"}
                                 size="sm"
+                                block
                                 onClick={handleAutoDetect}
-                                disabled={isInstalling || isLoading}
+                                disabled={isActive || isLoading}
                             >
                                 {isLoading ? "..." : t("iobit_auto_detect")}
                             </Button>
@@ -154,11 +237,25 @@ export default function IoBitPanel() {
                             <Button
                                 theme="secondary"
                                 size="sm"
+                                block
                                 onClick={handleBrowse}
-                                disabled={isInstalling || isLoading}
+                                disabled={isActive || isLoading}
                             >
                                 {isLoading ? "..." : t("iobit_browse")}
                             </Button>
+
+                            {/* Uninstall: sólo cuando IObit está instalado y no hay operación activa */}
+                            {canUninstall && (
+                                <Button
+                                    theme="danger"
+                                    size="sm"
+                                    block
+                                    onClick={handleUninstall}
+                                    disabled={isLoading}
+                                >
+                                    {t("iobit_uninstall")}
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>

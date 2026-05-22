@@ -208,7 +208,27 @@
   }
 }
 
+@keyframes iobit-sweep {
+  0%   { transform: translateX(-200%); }
+  100% { transform: translateX(500%); }
+}
+
 @layer components {
+
+  /* IObit progress bar */
+  .iobit-progress-track {
+    @apply relative w-full h-1.5 rounded-full overflow-hidden bg-white/10;
+  }
+
+  .iobit-progress-fill {
+    @apply absolute top-0 left-0 h-full rounded-full bg-minecraft-green-400 transition-[width] duration-300 ease-out;
+  }
+
+  .iobit-progress-fill--indeterminate {
+    width: 35% !important;
+    transition: none;
+    animation: iobit-sweep 1.5s ease-in-out infinite;
+  }
 
   /* App shell */
   .app {
@@ -703,7 +723,7 @@
   }
 
   .console-header {
-    @apply outline-1 outline-black mt-6 flex cursor-pointer items-center justify-between border px-4 py-2 border-app-border bg-app-panel;
+    @apply outline-1 outline-black flex cursor-pointer items-center justify-between border px-4 py-2 border-app-border bg-app-panel;
   }
 
   .console-panel {
@@ -1065,7 +1085,7 @@
 
   /* Sidebar Navigation */
   .sidebar-nav {
-    @apply flex flex-col h-full bg-app-panel border-r border-app-border w-64;
+    @apply flex flex-col h-full bg-app-panel border-r border-app-border w-64 pb-12;
   }
 
   .sidebar-nav__header {
@@ -1158,7 +1178,7 @@
 
   /* App Layout with Sidebar */
   .app-with-sidebar {
-    @apply flex min-h-screen bg-app-bg text-app-fg;
+    @apply flex bg-app-bg text-app-fg;
   }
 
   .app-sidebar {
