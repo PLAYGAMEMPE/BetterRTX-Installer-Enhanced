@@ -1118,27 +1118,42 @@
   }
 
   .disclaimer {
-    @apply border-t border-t-app-border/75 mt-auto text-sm min-h-72 h-fit bg-black/25 border-x border-x-minecraft-slate-900;
+    @apply border-t border-t-app-border/75 mt-auto text-sm bg-black/25 border-x border-x-minecraft-slate-900;
+    /* Sin altura fija — el contenedor se adapta al contenido */
   }
 
   .disclaimer__header {
-    @apply flex items-center justify-between px-2 h-12 border-t border-t-minecraft-slate-900/50 cursor-pointer z-10;
-  }
-
-  .disclaimer.disclaimer--collapsed {
-    @apply h-36 min-h-fit;
+    @apply flex items-center justify-between px-3 py-2.5 border-t border-t-minecraft-slate-900/50 cursor-pointer shrink-0 select-none;
   }
 
   .disclaimer h2 {
-    @apply text-xs font-semibold uppercase tracking-wider text-app-muted select-none cursor-pointer;
+    @apply text-xs font-semibold uppercase tracking-wider text-app-muted cursor-pointer;
+  }
+
+  /* Grid trick: anima de 1fr → 0fr sin conocer la altura exacta */
+  .disclaimer__body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 200ms ease-out;
+  }
+
+  .disclaimer.disclaimer--collapsed .disclaimer__body {
+    grid-template-rows: 0fr;
+  }
+
+  /* El inner debe tener min-height:0 para que el grid pueda colapsarlo */
+  .disclaimer__body-inner {
+    min-height: 0;
+    overflow: hidden;
   }
 
   .disclaimer p {
-    @apply text-xs h-full text-minecraft-slate-200 mt-2 pb-4 select-none cursor-default px-2 transition-[height] duration-150 ease-out will-change-[height];
-  }
-
-  .disclaimer.disclaimer--collapsed p {
-    @apply h-0;
+    @apply text-xs text-minecraft-slate-200 px-3 pt-1 pb-3 select-none cursor-default;
+    overflow-y: auto;
+    /* Scroll sutil solo si el texto supera ~10 líneas (~160px) */
+    max-height: 10rem;
+    scrollbar-width: thin;
+    scrollbar-color: theme(colors.minecraft-slate-600) transparent;
   }
 
   /* App Layout with Sidebar */
