@@ -1,19 +1,14 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
 name: DevSkim
 
 on:
   push:
-    branches: [ "main" ]
-    paths: [ 'v3/**/*.{ps1,psm1}', 'v2/**', 'v1/**' ]
+    branches: ["main"]
+    paths: ["v3/**/*.ps1", "v3/**/*.psm1", "v2/**", "v1/**"]
   pull_request:
-    branches: [ "main" ]
-    paths: [ 'v3/**/*.{ps1,psm1}', 'v2/**', 'v1/**' ]
+    branches: ["main"]
+    paths: ["v3/**/*.ps1", "v3/**/*.psm1", "v2/**", "v1/**"]
   schedule:
-    - cron: '00 05 * * 4'
+    - cron: "00 05 * * 4"
 
 jobs:
   lint:
@@ -25,14 +20,14 @@ jobs:
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run DevSkim scanner
         uses: microsoft/DevSkim-Action@v1
         with:
-            ignore-globs: "hashinstaller.ps1"
+          ignore-globs: "hashinstaller.ps1"
 
       - name: Upload DevSkim scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: devskim-results.sarif
