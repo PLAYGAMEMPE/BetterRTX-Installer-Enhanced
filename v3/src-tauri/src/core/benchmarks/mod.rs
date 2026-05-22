@@ -64,6 +64,7 @@ pub struct BenchmarkEntry {
 /// Detecta la GPU primaria via WMI (Win32_VideoController).
 pub fn detect_gpu() -> GpuInfo {
     let ps = r#"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 try {
     $g = Get-CimInstance Win32_VideoController | Select-Object -First 1
     @{ N = $g.Name; R = [long]$g.AdapterRAM } | ConvertTo-Json -Compress

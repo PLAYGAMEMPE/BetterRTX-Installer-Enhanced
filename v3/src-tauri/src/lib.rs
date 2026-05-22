@@ -116,9 +116,12 @@ fn is_cache_valid<T>(cached: &CacheEntry<T>) -> bool {
 
 async fn run_powershell_async(app_handle: tauri::AppHandle, script: &str) -> Result<String, String> {
     let shell = app_handle.shell();
+    // Forzar UTF-8 en el stdout de PowerShell para evitar corrupción de
+    // caracteres no-ASCII (ó, é, ú, etc.) en sistemas con codepage OEM.
+    let utf8_script = format!("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n{script}");
     let output = shell
         .command("powershell.exe")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script])
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &utf8_script])
         .output()
         .await
         .map_err(|e| format!("Failed to spawn PowerShell: {e}"))?;

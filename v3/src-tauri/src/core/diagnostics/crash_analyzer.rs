@@ -27,6 +27,7 @@ pub struct CrashEvent {
 pub fn scan_crashes(backup_timestamps: &[String]) -> Vec<CrashEvent> {
     // PowerShell: consulta el log Application filtrando errores de Minecraft.
     let ps = r#"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 try {
     $evts = Get-WinEvent -FilterHashtable @{
         LogName   = 'Application';
