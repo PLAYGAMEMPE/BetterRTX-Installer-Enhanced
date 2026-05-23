@@ -7,6 +7,20 @@ rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
 title BetterRTX Easy Installer - Dev
 
+rem ---- Auto-elevar si no es administrador ---------------------
+rem  El binario compilado lleva requireAdministrator en el manifest;
+rem  tauri dev necesita correr elevado para poder lanzarlo sin popup UAC
+rem  en cada hot-reload.
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo   [INFO]  Solicitando permisos de administrador...
+    echo Set UAC = CreateObject^("Shell.Application"^) > "%temp%\brtx_uac.vbs"
+    echo UAC.ShellExecute "%~s0", "", "", "runas", 1 >> "%temp%\brtx_uac.vbs"
+    "%temp%\brtx_uac.vbs"
+    del /q "%temp%\brtx_uac.vbs" >nul 2>&1
+    exit /b 0
+)
+
 set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%..") do set "ROOT_DIR=%%~fI"
 set "APP_DIR=%ROOT_DIR%\v3"
@@ -14,7 +28,7 @@ set "LOG_DIR=%ROOT_DIR%\logs"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" >nul 2>&1
 set "LOG=%LOG_DIR%\dev.log"
 
-> "%LOG%" echo [%DATE% %TIME%] === Dev iniciado ===
+> "%LOG%" echo [%DATE% %TIME%] === Dev iniciado (elevado) ===
 
 echo(
 echo ==================================================
@@ -36,10 +50,13 @@ if not defined CARGO_EXE (
   echo   [ERROR] Rust/Cargo no encontrado.
   echo   Ejecuta primero:  scripts\setup-env.bat
   >> "%LOG%" echo [ERROR] Cargo no encontrado.
+  pause
   endlocal & exit /b 1
 )
 
 rem ---- Validar pnpm -------------------------------------------
+rem  Se usa --dir porque pushd no es respetado por el shim de pnpm.
+rem  Se usa call porque pnpm es un .cmd y sin call el bat no retorna.
 set "PNPM_EXE="
 where pnpm >nul 2>&1
 if not errorlevel 1 (
@@ -56,6 +73,7 @@ if not defined PNPM_EXE (
   echo   [ERROR] pnpm no encontrado.
   echo   Ejecuta primero:  scripts\setup-env.bat
   >> "%LOG%" echo [ERROR] pnpm no encontrado.
+  pause
   endlocal & exit /b 1
 )
 
@@ -64,14 +82,11 @@ echo   [OK]    Rust y pnpm v!PNPM_VER! detectados.
 >> "%LOG%" echo [INFO] pnpm version: !PNPM_VER!
 
 rem ---- Sincronizar dependencias del frontend ------------------
-rem  pnpm install es instantaneo si nada cambio; necesario si
-rem  pnpm-lock.yaml se actualizo (ej. tras git pull).
-rem  Se usa --dir porque pushd no es respetado por el shim de pnpm.
-  Se usa call porque pnpm es un .cmd y sin call el bat no retorna.
 echo   [..]    Sincronizando dependencias del frontend...
 call "%PNPM_EXE%" --dir "%APP_DIR%" install >> "%LOG%" 2>&1
 if errorlevel 1 (
   echo   [ERROR] Fallo 'pnpm install'. Revisa %LOG%
+  pause
   endlocal & exit /b 1
 )
 echo   [OK]    Dependencias del frontend listas.
@@ -84,6 +99,7 @@ timeout /t 1 /nobreak >nul
 
 rem ---- Lanzar Tauri dev ---------------------------------------
 echo   [..]    Iniciando Tauri dev (Vite + Rust hot-reload)...
+echo   [..]    Primera compilacion puede tardar 2-4 minutos.
 echo   [..]    Cierra esta ventana para detener el servidor.
 echo(
 call "%PNPM_EXE%" --dir "%APP_DIR%" tauri dev
@@ -93,6 +109,7 @@ set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
   echo(
   echo   [ERROR] Tauri dev finalizo con codigo %RC%. Revisa %LOG%
+  pause
   endlocal & exit /b %RC%
 )
 endlocal & exit /b 0
