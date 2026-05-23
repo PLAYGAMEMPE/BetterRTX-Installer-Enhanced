@@ -10,7 +10,9 @@ use crate::infra::error::AppError;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::os::windows::process::CommandExt;
 use std::process::Command;
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const BENCHMARKS_FILE: &str = "benchmarks.json";
 
@@ -73,6 +75,7 @@ try {
 
     let (name, vram_bytes): (String, Option<u64>) = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", ps])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()
         .and_then(|o| {

@@ -8,7 +8,9 @@
 use super::{Confidence, InstallContext, InstallKind, PermissionGrant, PermissionProvider};
 use crate::infra::error::AppError;
 use std::path::Path;
+use std::os::windows::process::CommandExt;
 use std::process::Command;
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub struct AclProvider;
 
@@ -65,7 +67,8 @@ fn get_sddl(dir: &Path) -> Result<String, AppError> {
     let out = Command::new("icacls")
         .arg(dir)
         .arg("/save")
-        .arg("NUL") // solo necesitamos el SDDL; lo capturamos del stdout
+        .arg("NUL")
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| AppError::Io(format!("icacls get_sddl falló: {e}")))?;
 
@@ -76,6 +79,7 @@ fn get_sddl(dir: &Path) -> Result<String, AppError> {
             "-Command",
             &format!("(Get-Acl '{}').Sddl", dir.display()),
         ])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| AppError::Io(format!("get_sddl PowerShell falló: {e}")))?;
 
@@ -100,6 +104,7 @@ fn restore_acl(dir: &Path, sddl: &str) -> Result<(), AppError> {
     );
     let out = Command::new("powershell")
         .args(["-NoProfile", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| AppError::Io(format!("restore_acl falló: {e}")))?;
 
@@ -117,6 +122,7 @@ fn restore_acl(dir: &Path, sddl: &str) -> Result<(), AppError> {
 fn run_elevated(script: &str) -> Result<(), AppError> {
     let out = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| AppError::Io(format!("run_elevated falló al lanzar PS: {e}")))?;
 

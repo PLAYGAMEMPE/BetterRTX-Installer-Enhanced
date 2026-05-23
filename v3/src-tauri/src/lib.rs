@@ -14,6 +14,9 @@ use futures_util::StreamExt;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::ShellExt;
 use url::Url;
+// Evita que los procesos hijos (PowerShell, winget) abran ventanas de consola visibles.
+use std::os::windows::process::CommandExt;
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 // --- BetterRTX Easy Installer (fork): arquitectura modular ---
 // `infra/`  cimientos transversales (errores tipados, logging).
@@ -1291,6 +1294,7 @@ fn get_file_version_info(path: &Path) -> Option<String> {
     let ps = format!("(Get-Item '{}').VersionInfo.FileVersion", path_str);
     let output = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()?;
     let ver = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -1309,6 +1313,7 @@ fn try_install_via_winget() -> bool {
     // Verificar que winget está disponible
     if std::process::Command::new("winget")
         .arg("--version")
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .is_err()
     {
@@ -1316,7 +1321,6 @@ fn try_install_via_winget() -> bool {
     }
 
     // Ejecutar winget directamente — captura exit code real (0 = éxito).
-    // El instalador de IObit solicita UAC él mismo al necesitar elevación.
     let output = std::process::Command::new("winget")
         .args([
             "install",
@@ -1326,6 +1330,7 @@ fn try_install_via_winget() -> bool {
             "--accept-package-agreements",
             "--accept-source-agreements",
         ])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     match output {
@@ -1479,6 +1484,7 @@ fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
 
     let success = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+        .creation_flags(CREATE_NO_WINDOW)
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
@@ -1797,6 +1803,7 @@ async fn uninstall_iobit(app: tauri::AppHandle) -> Result<IoBitStatus, String> {
         );
         let status = std::process::Command::new("powershell")
             .args(["-NoProfile", "-Command", &ps])
+            .creation_flags(CREATE_NO_WINDOW)
             .status()
             .map_err(|e| format!("Error al ejecutar el desinstalador: {e}"))?;
         if status.success() {

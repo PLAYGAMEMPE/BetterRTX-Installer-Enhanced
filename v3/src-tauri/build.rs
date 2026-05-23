@@ -1,19 +1,15 @@
-fn main() {
-    // Embeber manifesto UAC en el exe de Windows.
-    // embed-manifest solo escribe RT_MANIFEST (tipo 24), sin bloque VERSION,
-    // por lo que no colisiona con el VS_VERSION_INFO que genera tauri-build.
-    // requireAdministrator: la app pide elevacion al arrancar una sola vez;
-    // los procesos hijos (instaladores de IObit, operaciones ACL) heredan el
-    // token elevado sin mostrar dialogos UAC adicionales.
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
-        embed_manifest::embed_manifest(
-            embed_manifest::new_manifest("BetterRTX Installer")
-                .requested_execution_level(
-                    embed_manifest::manifest::ExecutionLevel::RequireAdministrator,
-                ),
-        )
-        .expect("No se pudo embeber el manifesto de Windows");
-    }
+// Manifiesto UAC con requireAdministrator embebido via el canal oficial de Tauri.
+// tauri_build::try_build con WindowsAttributes::app_manifest() pasa el XML
+// directamente al linker MSVC (/MANIFEST:EMBED /MANIFESTINPUT:) sin crear
+// ningun recurso .res adicional, por lo que no colisiona con el VERSION que
+// genera tauri-build internamente.
+const APP_MANIFEST: &str = include_str!("app.manifest");
 
-    tauri_build::build()
+fn main() {
+    tauri_build::try_build(
+        tauri_build::Attributes::new().windows_attributes(
+            tauri_build::WindowsAttributes::new().app_manifest(APP_MANIFEST),
+        ),
+    )
+    .expect("failed to run tauri-build");
 }

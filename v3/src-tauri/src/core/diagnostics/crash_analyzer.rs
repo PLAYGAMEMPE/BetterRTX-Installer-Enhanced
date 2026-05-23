@@ -6,7 +6,9 @@
 
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
+use std::os::windows::process::CommandExt;
 use std::process::Command;
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Evento de crash de Minecraft detectado en el Event Log.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +59,7 @@ try {
 
     let output = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", ps])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     let Ok(out) = output else {

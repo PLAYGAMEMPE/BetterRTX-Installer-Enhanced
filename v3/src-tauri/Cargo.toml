@@ -16,7 +16,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
-embed-manifest = "1"                           # embeber manifiesto UAC (solo RT_MANIFEST, sin VERSION duplicado)
 
 [dependencies]
 tauri = { version = "2", features = [] }
