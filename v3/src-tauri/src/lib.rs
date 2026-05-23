@@ -1305,47 +1305,127 @@ fn get_file_version_info(path: &Path) -> Option<String> {
     }
 }
 
-/// Intenta instalar IObit Unlocker usando winget (Windows Package Manager).
-/// Ejecuta winget directamente para capturar el exit code real.
-/// El instalador de IObit solicita UAC por sí mismo si lo necesita.
-/// Devuelve `true` si la instalación fue exitosa.
-fn try_install_via_winget() -> bool {
-    // Verificar que winget está disponible
-    if std::process::Command::new("winget")
-        .arg("--version")
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .is_err()
-    {
-        return false;
-    }
-
-    // Ejecutar winget directamente — captura exit code real (0 = éxito).
-    let output = std::process::Command::new("winget")
+/// Comprueba si el proceso actual tiene token de administrador elevado.
+///
+/// Usa PowerShell `IsInRole(Administrator)` — el método más fiable en Windows
+/// independientemente del manifiesto de la aplicación.
+/// Resultado registrado en logs para diagnóstico.
+fn is_process_elevated() -> bool {
+    let output = std::process::Command::new("powershell")
         .args([
-            "install",
-            "--id", "IObit.IObitUnlocker",
-            "--exact",
-            "--silent",
-            "--accept-package-agreements",
-            "--accept-source-agreements",
+            "-NoProfile", "-NonInteractive", "-Command",
+            "([Security.Principal.WindowsPrincipal]\
+             [Security.Principal.WindowsIdentity]::GetCurrent())\
+             .IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)",
         ])
         .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     match output {
         Ok(o) => {
+            let result = String::from_utf8_lossy(&o.stdout).trim().to_lowercase();
+            let elevated = result == "true";
+            iobit_log(format!("[ELEVATION] is_process_elevated = {elevated} (raw: '{result}')"));
+            elevated
+        }
+        Err(e) => {
+            iobit_log(format!("[ELEVATION] PowerShell check failed: {e} — assuming NOT elevated"));
+            false
+        }
+    }
+}
+
+/// Escribe una línea de diagnóstico al log de IObit en %APPDATA%\brtx\iobit_install.log.
+fn iobit_log(msg: impl AsRef<str>) {
+    let line = format!("[{}] {}\n",
+        chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+        msg.as_ref());
+    // println! visible en dev mode; archivo para producción
+    print!("{}", line);
+    let log_path = brtx_dir().join("iobit_install.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true).append(true).open(&log_path)
+    {
+        let _ = std::io::Write::write_all(&mut f, line.as_bytes());
+    }
+}
+
+/// Intenta instalar IObit Unlocker usando winget (Windows Package Manager).
+///
+/// PRECONDICIÓN: solo se ejecuta si el proceso está elevado.
+/// Si no está elevado, winget usaría ShellExecuteEx para elevar el instalador
+/// de IObit (que tiene requireAdministrator) → dispara UAC de Windows.
+/// CREATE_NO_WINDOW NO previene los diálogos UAC (los gestiona consent.exe).
+fn try_install_via_winget() -> bool {
+    // Guardia de elevación: si no somos admin, winget disparará UAC al intentar
+    // instalar IObit. Devolver false para que el caller use el fallback al navegador.
+    if !is_process_elevated() {
+        iobit_log("[WINGET] Proceso no elevado — omitiendo winget para evitar UAC");
+        return false;
+    }
+
+    // Verificar que winget está disponible
+    let winget_ver = std::process::Command::new("winget")
+        .arg("--version")
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match &winget_ver {
+        Err(e) => {
+            iobit_log(format!("[WINGET] No disponible: {e}"));
+            return false;
+        }
+        Ok(o) => {
+            let ver = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            iobit_log(format!("[WINGET] Versión detectada: {ver}"));
+        }
+    }
+
+    let args = [
+        "install",
+        "--id", "IObit.IObitUnlocker",
+        "--exact",
+        "--silent",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+    ];
+    iobit_log(format!("[WINGET] Ejecutando: winget {}", args.join(" ")));
+
+    let output = std::process::Command::new("winget")
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match output {
+        Ok(o) => {
+            let code = o.status.code().unwrap_or(-1);
+            let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+            iobit_log(format!("[WINGET] Exit code: {code}"));
+            if !stdout.trim().is_empty() {
+                iobit_log(format!("[WINGET] stdout: {}", stdout.trim()));
+            }
+            if !stderr.trim().is_empty() {
+                iobit_log(format!("[WINGET] stderr: {}", stderr.trim()));
+            }
+
             if o.status.success() {
+                iobit_log("[WINGET] Instalación exitosa (exit 0)");
                 return true;
             }
             // Algunos códigos winget indican "ya instalado" y no son error real
-            let stdout = String::from_utf8_lossy(&o.stdout).to_lowercase();
-            stdout.contains("successfully installed")
-                || stdout.contains("already installed")
-                || stdout.contains("ya está instalado")
-                || stdout.contains("no available upgrade")
+            let stdout_lc = stdout.to_lowercase();
+            let already = stdout_lc.contains("successfully installed")
+                || stdout_lc.contains("already installed")
+                || stdout_lc.contains("ya está instalado")
+                || stdout_lc.contains("no available upgrade");
+            iobit_log(format!("[WINGET] Resultado 'already/ok' = {already}"));
+            already
         }
-        Err(_) => false,
+        Err(e) => {
+            iobit_log(format!("[WINGET] Error al lanzar winget: {e}"));
+            false
+        }
     }
 }
 
@@ -1422,31 +1502,55 @@ fn detect_installer_kind(path: &Path) -> InstallerKind {
 /// Spawn directo — sin wrapper de PowerShell. En producción (app elevada con
 /// requireAdministrator) el instalador hereda el token de admin y no muestra UAC.
 /// En dev mode (asInvoker, no elevado), `spawn()` falla con ERROR_ELEVATION_REQUIRED
-/// y la función devuelve `false`, activando el fallback al navegador.
+/// (código Win32 740) y devuelve `false` sin mostrar ningún diálogo UAC.
 ///
-/// Timeout de 3 minutos via polling; el proceso se mata si se supera.
+/// Registra en iobit_install.log: ruta, argumentos, elevación y exit code.
 fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
     let kind = detect_installer_kind(path);
+    let elevated = is_process_elevated();
+
+    iobit_log(format!(
+        "[INSTALLER] Ruta: {:?} | Tipo detectado: {} | Proceso elevado: {}",
+        path, kind.label(), elevated
+    ));
+
+    // Si no estamos elevados, el spawn directo devolverá ERROR_ELEVATION_REQUIRED
+    // (código Win32 740) de forma silenciosa — sin UAC. Documentamos esto en el log.
+    if !elevated {
+        iobit_log("[INSTALLER] Proceso NO elevado. CreateProcess fallará con \
+                   ERROR_ELEVATION_REQUIRED (740) — sin diálogo UAC. \
+                   Se usará fallback al navegador.");
+    }
 
     let mut cmd: std::process::Command = match kind {
         InstallerKind::Msi => {
+            iobit_log(format!(
+                "[INSTALLER] Comando: msiexec.exe /i {:?} /quiet /norestart", path
+            ));
             let mut c = std::process::Command::new("msiexec.exe");
             c.arg("/i").arg(path).args(["/quiet", "/norestart"]);
             c
         }
         InstallerKind::InnoSetup => {
+            iobit_log(format!(
+                "[INSTALLER] Comando: {:?} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TASKS=", path
+            ));
             let mut c = std::process::Command::new(path);
-            // /TASKS= (valor vacío) suprime componentes opcionales: IObit Updater,
-            // shortcuts y software adicional que abren ventanas secundarias.
+            // /TASKS= vacío suprime componentes opcionales: IObit Updater, shortcuts,
+            // software adicional — fuente de ventanas secundarias no deseadas.
             c.args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/TASKS="]);
             c
         }
         InstallerKind::Nsis => {
+            iobit_log(format!("[INSTALLER] Comando: {:?} /S", path));
             let mut c = std::process::Command::new(path);
             c.arg("/S");
             c
         }
         InstallerKind::Unknown => {
+            iobit_log(format!(
+                "[INSTALLER] Comando (tipo desconocido): {:?} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TASKS= /S", path
+            ));
             let mut c = std::process::Command::new(path);
             c.args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/TASKS=", "/S"]);
             c
@@ -1455,21 +1559,48 @@ fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
 
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let success = cmd.spawn().ok().map(|mut child| {
+    let spawn_result = cmd.spawn();
+    match &spawn_result {
+        Err(e) => {
+            let win32_code = e.raw_os_error().unwrap_or(0);
+            iobit_log(format!(
+                "[INSTALLER] spawn() falló — OS error {win32_code}: {e}"
+            ));
+            if win32_code == 740 {
+                iobit_log("[INSTALLER] Código 740 = ERROR_ELEVATION_REQUIRED. \
+                           El instalador requiere administrador y el proceso no está elevado. \
+                           No se mostró ningún UAC.");
+            }
+        }
+        Ok(_) => {
+            iobit_log("[INSTALLER] Proceso hijo lanzado correctamente (sin UAC).");
+        }
+    }
+
+    let success = spawn_result.ok().map(|mut child| {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
         loop {
             match child.try_wait() {
-                Ok(Some(status)) => break status.success(),
+                Ok(Some(status)) => {
+                    let code = status.code().unwrap_or(-1);
+                    iobit_log(format!("[INSTALLER] Exit code del instalador: {code}"));
+                    break status.success();
+                }
                 Ok(None) if std::time::Instant::now() >= deadline => {
+                    iobit_log("[INSTALLER] Timeout de 3 min alcanzado — matando proceso.");
                     let _ = child.kill();
                     break false;
                 }
                 Ok(None) => std::thread::sleep(std::time::Duration::from_millis(500)),
-                Err(_) => break false,
+                Err(e) => {
+                    iobit_log(format!("[INSTALLER] Error en try_wait: {e}"));
+                    break false;
+                }
             }
         }
     }).unwrap_or(false);
 
+    iobit_log(format!("[INSTALLER] run_silent_installer resultado: {success}"));
     (success, kind)
 }
 
@@ -1548,9 +1679,21 @@ async fn install_iobit_auto(app: tauri::AppHandle) -> Result<IoBitStatus, String
         };
     }
 
+    // Diagnóstico: estado de elevación al inicio
+    let elevated = tokio::task::spawn_blocking(is_process_elevated).await.unwrap_or(false);
+    iobit_log(format!(
+        "[INSTALL_AUTO] Iniciando install_iobit_auto — proceso elevado: {elevated}"
+    ));
+    if !elevated {
+        iobit_log("[INSTALL_AUTO] Proceso NO elevado (dev mode / asInvoker). \
+                   winget y el spawn directo serán omitidos para evitar UAC. \
+                   Se usará fallback al navegador si el auto-install falla.");
+    }
+
     // Paso 1 — ya instalado: evitar reinstalación innecesaria
     if let Some(path) = get_iobit_path_cached() {
         let version = get_iobit_version(&path);
+        iobit_log(format!("[INSTALL_AUTO] Ya instalado en {:?}", path));
         return Ok(IoBitStatus {
             installed: true,
             path: Some(path.to_string_lossy().to_string()),
@@ -1558,7 +1701,7 @@ async fn install_iobit_auto(app: tauri::AppHandle) -> Result<IoBitStatus, String
         });
     }
 
-    // Paso 2 — intentar instalación vía winget (método preferido)
+    // Paso 2 — intentar instalación vía winget (método preferido, solo si elevado)
     prog!("resolving", None, "Intentando instalar con winget...");
     let winget_ok = tokio::task::spawn_blocking(try_install_via_winget)
         .await
