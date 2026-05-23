@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
 
-  <!-- Pide elevacion UAC al iniciar la app; los procesos hijos heredan el token elevado -->
+  <!--
+    Manifiesto de PRODUCCION (release build).
+    En modo dev (cargo tauri dev) este archivo NO se embebe;
+    Tauri usa su manifiesto por defecto (asInvoker, sin UAC).
+    En release, el EXE solicita elevacion una sola vez al arrancar;
+    todos los procesos hijos heredan el token de admin sin UAC adicional.
+  -->
+
+  <!-- Solicitar elevacion UAC al iniciar la app (solo release). -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
@@ -10,11 +18,40 @@
     </security>
   </trustInfo>
 
-  <!-- Declara compatibilidad explicita con Windows 10 y 11 -->
+  <!-- Compatibilidad explicita con Vista, 7, 8, 8.1 y 10/11. -->
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>
+      <supportedOS Id="{e2011457-1546-43c5-a5fe-008deee3d3f0}"/>
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
       <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
     </application>
   </compatibility>
+
+  <!-- Habilita rutas de mas de 260 caracteres. -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+
+  <!--
+    Common-Controls v6: requerido por WebView2 y los controles modernos de Windows.
+    Sin esta declaracion el cargador resuelve comctl32.dll v5, que no exporta
+    las funciones que Tauri/WebView2 necesitan, causando STATUS_ENTRYPOINT_NOT_FOUND.
+  -->
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*"
+      />
+    </dependentAssembly>
+  </dependency>
 
 </assembly>

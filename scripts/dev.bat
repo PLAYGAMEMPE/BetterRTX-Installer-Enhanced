@@ -3,23 +3,13 @@ rem ============================================================
 rem  BetterRTX Easy Installer - Modo desarrollo (Tauri dev)
 rem  Lanza frontend (Vite) + backend (Rust) con hot-reload.
 rem  Requisito previo: scripts\setup-env.bat ejecutado una vez.
+rem
+rem  En dev el binario se compila sin requireAdministrator (asInvoker),
+rem  por lo que este script NO necesita elevacion de admin.
+rem  El build de produccion (build-release.bat) embebe el manifiesto UAC.
 rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
 title BetterRTX Easy Installer - Dev
-
-rem ---- Auto-elevar si no es administrador ---------------------
-rem  El binario compilado lleva requireAdministrator en el manifest;
-rem  tauri dev necesita correr elevado para poder lanzarlo sin popup UAC
-rem  en cada hot-reload.
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo   [INFO]  Solicitando permisos de administrador...
-    echo Set UAC = CreateObject^("Shell.Application"^) > "%temp%\brtx_uac.vbs"
-    echo UAC.ShellExecute "%~s0", "", "", "runas", 1 >> "%temp%\brtx_uac.vbs"
-    "%temp%\brtx_uac.vbs"
-    del /q "%temp%\brtx_uac.vbs" >nul 2>&1
-    exit /b 0
-)
 
 set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%..") do set "ROOT_DIR=%%~fI"
@@ -28,7 +18,7 @@ set "LOG_DIR=%ROOT_DIR%\logs"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" >nul 2>&1
 set "LOG=%LOG_DIR%\dev.log"
 
-> "%LOG%" echo [%DATE% %TIME%] === Dev iniciado (elevado) ===
+> "%LOG%" echo [%DATE% %TIME%] === Dev iniciado ===
 
 echo(
 echo ==================================================
