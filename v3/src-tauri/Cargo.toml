@@ -16,7 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
-winresource = "0.1"                            # embeber manifiesto UAC en el exe de Windows
+embed-manifest = "1"                           # embeber manifiesto UAC (solo RT_MANIFEST, sin VERSION duplicado)
 
 [dependencies]
 tauri = { version = "2", features = [] }
