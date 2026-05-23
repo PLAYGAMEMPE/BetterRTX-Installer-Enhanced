@@ -1347,6 +1347,145 @@ fn try_install_via_winget() -> bool {
 }
 
 /// Instala IObit Unlocker de forma automática.
+// ─────────────────────────────────────────────────────────────────────────────
+// Detección de tipo de instalador e instalación silenciosa
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Tipo de empaquetado del instalador detectado.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum InstallerKind {
+    /// Inno Setup — flags: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
+    InnoSetup,
+    /// NSIS (Nullsoft Scriptable Install System) — flag: /S
+    Nsis,
+    /// Microsoft Installer — vía msiexec /quiet /norestart
+    Msi,
+    /// Desconocido — se prueban los flags más comunes en orden
+    Unknown,
+}
+
+impl InstallerKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::InnoSetup => "Inno Setup",
+            Self::Nsis      => "NSIS",
+            Self::Msi       => "MSI",
+            Self::Unknown   => "genérico",
+        }
+    }
+}
+
+/// Detecta el empaquetado del instalador inspeccionando los primeros 512 KB del EXE.
+///
+/// Inno Setup deja la cadena literal "Inno Setup" en el stub del ejecutable.
+/// NSIS tiene la firma `0xDEADBEEF` o la cadena "Nullsoft" en el stub.
+/// MSI se reconoce por extensión.
+fn detect_installer_kind(path: &Path) -> InstallerKind {
+    if path.extension()
+        .map(|e| e.eq_ignore_ascii_case("msi"))
+        .unwrap_or(false)
+    {
+        return InstallerKind::Msi;
+    }
+
+    let Ok(mut f) = fs::File::open(path) else {
+        return InstallerKind::Unknown;
+    };
+
+    let mut buf = vec![0u8; 524_288]; // 512 KB
+    use std::io::Read as _;
+    let n = f.read(&mut buf).unwrap_or(0);
+    buf.truncate(n);
+
+    // Inno Setup: cadena ASCII "Inno Setup" en el stub no comprimido
+    if buf.windows(10).any(|w| w == b"Inno Setup") {
+        return InstallerKind::InnoSetup;
+    }
+
+    // NSIS: firma 0xEFBEADDE (little-endian de 0xDEADBEEF) o cadena "Nullsoft"
+    let nsis_magic: &[u8] = &[0xEF, 0xBE, 0xAD, 0xDE];
+    if buf.windows(4).any(|w| w == nsis_magic) {
+        return InstallerKind::Nsis;
+    }
+    if buf.windows(8).any(|w| w == b"Nullsoft") {
+        return InstallerKind::Nsis;
+    }
+
+    InstallerKind::Unknown
+}
+
+/// Ejecuta el instalador en modo completamente silencioso con elevación UAC.
+///
+/// * Para **Inno Setup** usa `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-`
+///   (estos flags eliminan toda la UI, incluyendo la pantalla de licencia).
+/// * Para **NSIS** usa `/S`.
+/// * Para **MSI** usa `msiexec /quiet /norestart`.
+/// * Para **desconocido** prueba ambos flags combinados.
+///
+/// El proceso se ejecuta siempre elevado vía `Start-Process -Verb RunAs -Wait`
+/// para garantizar que el instalador pueda escribir en Program Files.
+/// Un timeout de 3 minutos previene bloqueos indefinidos.
+///
+/// Devuelve `true` si PowerShell reportó éxito y `false` en cualquier otro caso.
+fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
+    let kind = detect_installer_kind(path);
+    let path_str = path.to_string_lossy().replace('\'', "''");
+
+    // Construimos el bloque PowerShell según el tipo detectado
+    let ps = match kind {
+        InstallerKind::Msi => {
+            // msiexec necesita que la ruta vaya entre comillas dobles
+            format!(
+                "$p = Start-Process msiexec.exe \
+                    -ArgumentList '/i \"{path_str}\" /quiet /norestart /passive' \
+                    -Verb RunAs -PassThru; \
+                 $ok = $p.WaitForExit(180000); \
+                 if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
+                 exit $p.ExitCode"
+            )
+        }
+        InstallerKind::InnoSetup => {
+            format!(
+                "$p = Start-Process '{path_str}' \
+                    -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-' \
+                    -Verb RunAs -WindowStyle Hidden -PassThru; \
+                 $ok = $p.WaitForExit(180000); \
+                 if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
+                 exit $p.ExitCode"
+            )
+        }
+        InstallerKind::Nsis => {
+            format!(
+                "$p = Start-Process '{path_str}' \
+                    -ArgumentList '/S' \
+                    -Verb RunAs -WindowStyle Hidden -PassThru; \
+                 $ok = $p.WaitForExit(180000); \
+                 if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
+                 exit $p.ExitCode"
+            )
+        }
+        InstallerKind::Unknown => {
+            // Prueba los flags más comunes en un solo comando combinado
+            format!(
+                "$p = Start-Process '{path_str}' \
+                    -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /S' \
+                    -Verb RunAs -WindowStyle Hidden -PassThru; \
+                 $ok = $p.WaitForExit(180000); \
+                 if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
+                 exit $p.ExitCode"
+            )
+        }
+    };
+
+    let success = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+
+    (success, kind)
+}
+
 ///
 /// Resuelve la URL real del instalador de IObit Unlocker.
 ///
@@ -1542,31 +1681,25 @@ async fn install_iobit_auto(app: tauri::AppHandle) -> Result<IoBitStatus, String
 
     let installer_version = get_file_version_info(&tmp);
 
-    // Ejecutar el instalador — el manifesto UAC del EXE pide la confirmación de admin;
-    // el usuario sólo ve esa ventana, el resto es automático.
-    prog!("installing", None, "Ejecutando instalador... (confirma el UAC si aparece)");
+    // Paso A: detectar el tipo de instalador (lee ≤512 KB, es rápido)
+    prog!("installing", None, "Detectando tipo de instalador...");
+    let kind = {
+        let tmp_ref = tmp.clone();
+        tokio::task::spawn_blocking(move || detect_installer_kind(&tmp_ref))
+            .await
+            .unwrap_or(InstallerKind::Unknown)
+    };
+
+    // Paso B: instalar en modo completamente silencioso sin ninguna UI
+    prog!(
+        "installing",
+        None,
+        format!("Instalando en silencio ({})...", kind.label())
+    );
     let tmp_clone = tmp.clone();
-    let install_ok = tokio::task::spawn_blocking(move || -> bool {
-        let path_str = tmp_clone.to_string_lossy().replace('\'', "''");
-
-        // Intento 1: ejecutar directamente (el instalador pide UAC por sí mismo)
-        let direct = std::process::Command::new(&*tmp_clone)
-            .arg("/S")
-            .status();
-
-        if matches!(direct, Ok(s) if s.success()) {
-            return true;
-        }
-
-        // Intento 2: forzar elevación vía PowerShell por si el contexto lo requiere
-        let ps = format!(
-            "Start-Process -FilePath '{path_str}' -ArgumentList '/S' -Verb RunAs -Wait"
-        );
-        std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
+    let install_ok = tokio::task::spawn_blocking(move || {
+        let (ok, _) = run_silent_installer(&tmp_clone);
+        ok
     })
     .await
     .unwrap_or(false);
