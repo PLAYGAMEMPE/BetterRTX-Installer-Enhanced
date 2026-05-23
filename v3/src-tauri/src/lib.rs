@@ -1417,77 +1417,58 @@ fn detect_installer_kind(path: &Path) -> InstallerKind {
     InstallerKind::Unknown
 }
 
-/// Ejecuta el instalador en modo completamente silencioso con elevación UAC.
+/// Ejecuta el instalador en modo completamente silencioso.
 ///
-/// * Para **Inno Setup** usa `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-`
-///   (estos flags eliminan toda la UI, incluyendo la pantalla de licencia).
-/// * Para **NSIS** usa `/S`.
-/// * Para **MSI** usa `msiexec /quiet /norestart`.
-/// * Para **desconocido** prueba ambos flags combinados.
+/// Spawn directo — sin wrapper de PowerShell. En producción (app elevada con
+/// requireAdministrator) el instalador hereda el token de admin y no muestra UAC.
+/// En dev mode (asInvoker, no elevado), `spawn()` falla con ERROR_ELEVATION_REQUIRED
+/// y la función devuelve `false`, activando el fallback al navegador.
 ///
-/// La app corre elevada (requireAdministrator en app.manifest), por lo que el
-/// instalador hereda el token de admin sin necesitar `-Verb RunAs`.
-/// Un timeout de 3 minutos previene bloqueos indefinidos.
-///
-/// Devuelve `true` si PowerShell reportó éxito y `false` en cualquier otro caso.
+/// Timeout de 3 minutos via polling; el proceso se mata si se supera.
 fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
     let kind = detect_installer_kind(path);
-    let path_str = path.to_string_lossy().replace('\'', "''");
 
-    // Construimos el bloque PowerShell según el tipo detectado
-    let ps = match kind {
+    let mut cmd: std::process::Command = match kind {
         InstallerKind::Msi => {
-            // msiexec necesita que la ruta vaya entre comillas dobles.
-            // La app ya corre elevada (requireAdministrator en app.manifest),
-            // por lo que NO se necesita -Verb RunAs.
-            format!(
-                "$p = Start-Process msiexec.exe \
-                    -ArgumentList '/i \"{path_str}\" /quiet /norestart /passive' \
-                    -PassThru; \
-                 $ok = $p.WaitForExit(180000); \
-                 if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
-                 exit $p.ExitCode"
-            )
+            let mut c = std::process::Command::new("msiexec.exe");
+            c.arg("/i").arg(path).args(["/quiet", "/norestart"]);
+            c
         }
         InstallerKind::InnoSetup => {
-            format!(
-                "$p = Start-Process '{path_str}' \
-                    -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-' \
-                    -WindowStyle Hidden -PassThru; \
-                 $ok = $p.WaitForExit(180000); \
-                 if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
-                 exit $p.ExitCode"
-            )
+            let mut c = std::process::Command::new(path);
+            // /TASKS= (valor vacío) suprime componentes opcionales: IObit Updater,
+            // shortcuts y software adicional que abren ventanas secundarias.
+            c.args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/TASKS="]);
+            c
         }
         InstallerKind::Nsis => {
-            format!(
-                "$p = Start-Process '{path_str}' \
-                    -ArgumentList '/S' \
-                    -WindowStyle Hidden -PassThru; \
-                 $ok = $p.WaitForExit(180000); \
-                 if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
-                 exit $p.ExitCode"
-            )
+            let mut c = std::process::Command::new(path);
+            c.arg("/S");
+            c
         }
         InstallerKind::Unknown => {
-            // Prueba los flags más comunes en un solo comando combinado
-            format!(
-                "$p = Start-Process '{path_str}' \
-                    -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /S' \
-                    -WindowStyle Hidden -PassThru; \
-                 $ok = $p.WaitForExit(180000); \
-                 if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
-                 exit $p.ExitCode"
-            )
+            let mut c = std::process::Command::new(path);
+            c.args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/TASKS=", "/S"]);
+            c
         }
     };
 
-    let success = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let success = cmd.spawn().ok().map(|mut child| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status.success(),
+                Ok(None) if std::time::Instant::now() >= deadline => {
+                    let _ = child.kill();
+                    break false;
+                }
+                Ok(None) => std::thread::sleep(std::time::Duration::from_millis(500)),
+                Err(_) => break false,
+            }
+        }
+    }).unwrap_or(false);
 
     (success, kind)
 }
