@@ -111,15 +111,12 @@ fn restore_acl(dir: &Path, sddl: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Ejecuta un comando PowerShell con elevacion UAC (`-Verb RunAs`).
+/// Ejecuta un comando PowerShell.
+/// La app corre elevada (requireAdministrator en app.manifest),
+/// por lo que el proceso hereda el token de admin directamente.
 fn run_elevated(script: &str) -> Result<(), AppError> {
-    let escaped = script.replace('\'', "''");
-    let ps_cmd = format!(
-        "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -Command \"{}\"' -Wait",
-        escaped,
-    );
     let out = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &ps_cmd])
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .output()
         .map_err(|e| AppError::Io(format!("run_elevated falló al lanzar PS: {e}")))?;
 
@@ -127,7 +124,7 @@ fn run_elevated(script: &str) -> Result<(), AppError> {
         let err = String::from_utf8_lossy(&out.stderr);
         return Err(AppError::PermissionDenied {
             path: String::new(),
-            strategy: format!("AclProvider elevado: {err}"),
+            strategy: format!("AclProvider: {err}"),
         });
     }
     Ok(())

@@ -467,31 +467,29 @@ async fn try_iobit_copy_async(app_handle: &tauri::AppHandle, ioexe: &Path, insta
 }
 
 async fn try_elevated_copy_async(app_handle: &tauri::AppHandle, mc_dest: &Path, materials: &[PathBuf]) -> Result<(), String> {
-    // Use PowerShell with elevation request to copy files
-    let mut ps_script = String::from("Start-Process powershell -Verb RunAs -ArgumentList '-Command', '");
-    
+    // La app corre elevada (requireAdministrator en app.manifest),
+    // por lo que basta ejecutar PowerShell directamente sin -Verb RunAs.
+    let mut ps_script = String::new();
+
     for m in materials {
-        let src = m.to_string_lossy().replace('\\', "\\\\").replace('\'', "\'\'");
+        let src = m.to_string_lossy().replace('\'', "\'\'");
         let dest_file = mc_dest.join(m.file_name().unwrap());
-        let dest = dest_file.to_string_lossy().replace('\\', "\\\\").replace('\'', "\'\'");
+        let dest = dest_file.to_string_lossy().replace('\'', "\'\'");
         ps_script.push_str(&format!("Copy-Item '{}' '{}' -Force; ", src, dest));
     }
-    
-    ps_script.push_str("' -Wait");
-    
+
     let shell = app_handle.shell();
     let output = shell
         .command("powershell.exe")
         .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
         .output()
         .await
-        .map_err(|e| format!("Failed to run elevated PowerShell: {e}"))?;
+        .map_err(|e| format!("Failed to run PowerShell: {e}"))?;
 
     if output.status.success() {
-        // Skipping file verification per user preference
         Ok(())
     } else {
-        Err(format!("Elevated PowerShell failed: {}", String::from_utf8_lossy(&output.stderr)))
+        Err(format!("PowerShell copy failed: {}", String::from_utf8_lossy(&output.stderr)))
     }
 }
 
@@ -1422,8 +1420,8 @@ fn detect_installer_kind(path: &Path) -> InstallerKind {
 /// * Para **MSI** usa `msiexec /quiet /norestart`.
 /// * Para **desconocido** prueba ambos flags combinados.
 ///
-/// El proceso se ejecuta siempre elevado vía `Start-Process -Verb RunAs -Wait`
-/// para garantizar que el instalador pueda escribir en Program Files.
+/// La app corre elevada (requireAdministrator en app.manifest), por lo que el
+/// instalador hereda el token de admin sin necesitar `-Verb RunAs`.
 /// Un timeout de 3 minutos previene bloqueos indefinidos.
 ///
 /// Devuelve `true` si PowerShell reportó éxito y `false` en cualquier otro caso.
@@ -1434,11 +1432,13 @@ fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
     // Construimos el bloque PowerShell según el tipo detectado
     let ps = match kind {
         InstallerKind::Msi => {
-            // msiexec necesita que la ruta vaya entre comillas dobles
+            // msiexec necesita que la ruta vaya entre comillas dobles.
+            // La app ya corre elevada (requireAdministrator en app.manifest),
+            // por lo que NO se necesita -Verb RunAs.
             format!(
                 "$p = Start-Process msiexec.exe \
                     -ArgumentList '/i \"{path_str}\" /quiet /norestart /passive' \
-                    -Verb RunAs -PassThru; \
+                    -PassThru; \
                  $ok = $p.WaitForExit(180000); \
                  if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
                  exit $p.ExitCode"
@@ -1448,7 +1448,7 @@ fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
             format!(
                 "$p = Start-Process '{path_str}' \
                     -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-' \
-                    -Verb RunAs -WindowStyle Hidden -PassThru; \
+                    -WindowStyle Hidden -PassThru; \
                  $ok = $p.WaitForExit(180000); \
                  if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
                  exit $p.ExitCode"
@@ -1458,7 +1458,7 @@ fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
             format!(
                 "$p = Start-Process '{path_str}' \
                     -ArgumentList '/S' \
-                    -Verb RunAs -WindowStyle Hidden -PassThru; \
+                    -WindowStyle Hidden -PassThru; \
                  $ok = $p.WaitForExit(180000); \
                  if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
                  exit $p.ExitCode"
@@ -1469,7 +1469,7 @@ fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
             format!(
                 "$p = Start-Process '{path_str}' \
                     -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /S' \
-                    -Verb RunAs -WindowStyle Hidden -PassThru; \
+                    -WindowStyle Hidden -PassThru; \
                  $ok = $p.WaitForExit(180000); \
                  if (-not $ok) {{ try {{ $p.Kill() }} catch {{}}; exit 1 }}; \
                  exit $p.ExitCode"
@@ -1791,8 +1791,9 @@ async fn uninstall_iobit(app: tauri::AppHandle) -> Result<IoBitStatus, String> {
     // Ejecutar el desinstalador con /VERYSILENT (Inno Setup)
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         let path_str = uninstall_exe.to_string_lossy().replace('\'', "''");
+        // La app ya corre elevada; -Verb RunAs no es necesario.
         let ps = format!(
-            "Start-Process -FilePath '{path_str}' -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Verb RunAs -Wait"
+            "Start-Process -FilePath '{path_str}' -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -WindowStyle Hidden -Wait"
         );
         let status = std::process::Command::new("powershell")
             .args(["-NoProfile", "-Command", &ps])
