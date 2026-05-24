@@ -1499,109 +1499,181 @@ fn detect_installer_kind(path: &Path) -> InstallerKind {
 
 /// Ejecuta el instalador en modo completamente silencioso.
 ///
-/// Spawn directo — sin wrapper de PowerShell. En producción (app elevada con
-/// requireAdministrator) el instalador hereda el token de admin y no muestra UAC.
-/// En dev mode (asInvoker, no elevado), `spawn()` falla con ERROR_ELEVATION_REQUIRED
-/// (código Win32 740) y devuelve `false` sin mostrar ningún diálogo UAC.
+/// # Por qué dos rutas
 ///
-/// Registra en iobit_install.log: ruta, argumentos, elevación y exit code.
+/// El instalador de IObit Unlocker (Inno Setup 5.5.7) tiene `asInvoker` en su manifiesto,
+/// NO `requireAdministrator`. Esto tiene consecuencias críticas:
+///
+/// - **Con elevación (producción):** `Command::new` spawn directo funciona — el instalador
+///   hereda el token elevado, su script Pascal ve `IsAdmin=true`, no re-eleva, los flags
+///   `/VERYSILENT` son procesados por el único proceso que ejecuta → instalación silenciosa.
+///
+/// - **Sin elevación (dev mode):** `spawn()` tiene ÉXITO (no hay `ERROR_ELEVATION_REQUIRED`
+///   porque el manifest es `asInvoker`). El instalador arranca no-elevado, su script Pascal
+///   detecta que no es admin y llama `ShellExecuteEx(runas)` **internamente** para re-lanzarse
+///   elevado. El problema: el proceso relanzado puede NO recibir nuestros flags `/VERYSILENT`
+///   correctamente (depende de la implementación del script Pascal de IObit), por lo que el
+///   wizard UI aparece. El proceso original sale con código 2 (re-lanzado/cancelado).
+///
+/// ## Solución para el caso no-elevado
+///
+/// Llamamos a `ShellExecuteEx(runas)` NOSOTROS con todos los flags silenciosos, ANTES de que
+/// el instalador pueda auto-relanzarse. Esto garantiza que el proceso elevado recibe
+/// `/VERYSILENT` desde el principio, sin depender del mecanismo interno del instalador.
+/// Aparece UN solo diálogo UAC en el momento esperado (cuando el usuario pulsa "Instalar").
 fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
     let kind = detect_installer_kind(path);
     let elevated = is_process_elevated();
 
     iobit_log(format!(
-        "[INSTALLER] Ruta: {:?} | Tipo detectado: {} | Proceso elevado: {}",
+        "[INSTALLER] path={:?} | kind={} | elevated={}",
         path, kind.label(), elevated
     ));
 
-    // Si no estamos elevados, el spawn directo devolverá ERROR_ELEVATION_REQUIRED
-    // (código Win32 740) de forma silenciosa — sin UAC. Documentamos esto en el log.
-    if !elevated {
-        iobit_log("[INSTALLER] Proceso NO elevado. CreateProcess fallará con \
-                   ERROR_ELEVATION_REQUIRED (740) — sin diálogo UAC. \
-                   Se usará fallback al navegador.");
-    }
-
-    let mut cmd: std::process::Command = match kind {
-        InstallerKind::Msi => {
-            iobit_log(format!(
-                "[INSTALLER] Comando: msiexec.exe /i {:?} /quiet /norestart", path
-            ));
-            let mut c = std::process::Command::new("msiexec.exe");
-            c.arg("/i").arg(path).args(["/quiet", "/norestart"]);
-            c
-        }
-        InstallerKind::InnoSetup => {
-            iobit_log(format!(
-                "[INSTALLER] Comando: {:?} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TASKS=", path
-            ));
-            let mut c = std::process::Command::new(path);
-            // /TASKS= vacío suprime componentes opcionales: IObit Updater, shortcuts,
-            // software adicional — fuente de ventanas secundarias no deseadas.
-            c.args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/TASKS="]);
-            c
-        }
-        InstallerKind::Nsis => {
-            iobit_log(format!("[INSTALLER] Comando: {:?} /S", path));
-            let mut c = std::process::Command::new(path);
-            c.arg("/S");
-            c
-        }
-        InstallerKind::Unknown => {
-            iobit_log(format!(
-                "[INSTALLER] Comando (tipo desconocido): {:?} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TASKS= /S", path
-            ));
-            let mut c = std::process::Command::new(path);
-            c.args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/TASKS=", "/S"]);
-            c
-        }
-    };
-
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    let spawn_result = cmd.spawn();
-    match &spawn_result {
-        Err(e) => {
-            let win32_code = e.raw_os_error().unwrap_or(0);
-            iobit_log(format!(
-                "[INSTALLER] spawn() falló — OS error {win32_code}: {e}"
-            ));
-            if win32_code == 740 {
-                iobit_log("[INSTALLER] Código 740 = ERROR_ELEVATION_REQUIRED. \
-                           El instalador requiere administrador y el proceso no está elevado. \
-                           No se mostró ningún UAC.");
+    if elevated {
+        // ── RUTA A: app ya tiene admin ──────────────────────────────────────────────
+        // El instalador (asInvoker) hereda el token elevado.
+        // IsAdmin=true → sin re-elevación → /VERYSILENT aplicado al primer y único proceso.
+        let mut cmd: std::process::Command = match kind {
+            InstallerKind::Msi => {
+                iobit_log(format!("[INSTALLER-A] msiexec.exe /i {:?} /quiet /norestart", path));
+                let mut c = std::process::Command::new("msiexec.exe");
+                c.arg("/i").arg(path).args(["/quiet", "/norestart"]);
+                c
             }
-        }
-        Ok(_) => {
-            iobit_log("[INSTALLER] Proceso hijo lanzado correctamente (sin UAC).");
-        }
-    }
+            InstallerKind::InnoSetup | InstallerKind::Unknown => {
+                iobit_log(format!(
+                    "[INSTALLER-A] {:?} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TASKS=", path
+                ));
+                let mut c = std::process::Command::new(path);
+                // /TASKS= vacío suprime componentes opcionales (IObit Updater, shortcuts)
+                // que pueden abrir ventanas secundarias no deseadas.
+                c.args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/TASKS="]);
+                c
+            }
+            InstallerKind::Nsis => {
+                iobit_log(format!("[INSTALLER-A] {:?} /S", path));
+                let mut c = std::process::Command::new(path);
+                c.arg("/S");
+                c
+            }
+        };
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let success = spawn_result.ok().map(|mut child| {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
-        loop {
-            match child.try_wait() {
-                Ok(Some(status)) => {
-                    let code = status.code().unwrap_or(-1);
-                    iobit_log(format!("[INSTALLER] Exit code del instalador: {code}"));
-                    break status.success();
-                }
-                Ok(None) if std::time::Instant::now() >= deadline => {
-                    iobit_log("[INSTALLER] Timeout de 3 min alcanzado — matando proceso.");
-                    let _ = child.kill();
-                    break false;
-                }
-                Ok(None) => std::thread::sleep(std::time::Duration::from_millis(500)),
-                Err(e) => {
-                    iobit_log(format!("[INSTALLER] Error en try_wait: {e}"));
-                    break false;
+        let result = cmd.spawn().ok().map(|mut child| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
+            loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        let code = status.code().unwrap_or(-1);
+                        iobit_log(format!("[INSTALLER-A] exit code={code} success={}", status.success()));
+                        break status.success();
+                    }
+                    Ok(None) if std::time::Instant::now() >= deadline => {
+                        iobit_log("[INSTALLER-A] timeout 3 min — proceso matado");
+                        let _ = child.kill();
+                        break false;
+                    }
+                    Ok(None) => std::thread::sleep(std::time::Duration::from_millis(500)),
+                    Err(e) => {
+                        iobit_log(format!("[INSTALLER-A] try_wait error: {e}"));
+                        break false;
+                    }
                 }
             }
-        }
-    }).unwrap_or(false);
+        }).unwrap_or_else(|| {
+            iobit_log("[INSTALLER-A] spawn() falló");
+            false
+        });
 
-    iobit_log(format!("[INSTALLER] run_silent_installer resultado: {success}"));
-    (success, kind)
+        (result, kind)
+
+    } else {
+        // ── RUTA B: app NO tiene admin ──────────────────────────────────────────────
+        // Si usáramos spawn directo, el instalador arrancaría no-elevado, detectaría falta de
+        // admin en su Pascal script y haría ShellExecuteEx(runas) internamente → UAC inesperado
+        // → proceso elevado posiblemente sin nuestros flags → wizard visible.
+        //
+        // En su lugar, usamos ShellExecuteEx(runas) NOSOTROS con los flags ya incluidos.
+        // El proceso elevado recibe /VERYSILENT desde el inicio y no necesita re-lanzarse.
+        // Aparece UN UAC en el momento conocido (al pulsar el botón de instalación).
+        //
+        // PowerShell Start-Process -Verb RunAs -Wait obtiene el handle del proceso elevado
+        // vía SEE_MASK_NOCLOSEPROCESS y espera su terminación (funciona cross-IL en Windows).
+        let path_str = path.to_string_lossy().replace('\'', "''");
+
+        let ps_cmd = match kind {
+            InstallerKind::Msi => format!(
+                "try {{\
+                    $p = Start-Process msiexec.exe \
+                        -ArgumentList '/i \"{path_str}\" /quiet /norestart' \
+                        -Verb RunAs -Wait -PassThru -ErrorAction Stop; \
+                    if ($null -ne $p) {{ exit $p.ExitCode }} else {{ exit 1 }}\
+                }} catch {{ exit 1 }}"
+            ),
+            InstallerKind::InnoSetup | InstallerKind::Unknown => format!(
+                "try {{\
+                    $p = Start-Process '{path_str}' \
+                        -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /TASKS=' \
+                        -Verb RunAs -Wait -PassThru -ErrorAction Stop; \
+                    if ($null -ne $p) {{ exit $p.ExitCode }} else {{ exit 1 }}\
+                }} catch {{ exit 1 }}"
+            ),
+            InstallerKind::Nsis => format!(
+                "try {{\
+                    $p = Start-Process '{path_str}' \
+                        -ArgumentList '/S' \
+                        -Verb RunAs -Wait -PassThru -ErrorAction Stop; \
+                    if ($null -ne $p) {{ exit $p.ExitCode }} else {{ exit 1 }}\
+                }} catch {{ exit 1 }}"
+            ),
+        };
+
+        iobit_log(format!(
+            "[INSTALLER-B] ShellExecuteEx(runas) con flags silenciosos.\n\
+             El proceso elevado recibirá /VERYSILENT directamente — sin wizard.\n\
+             Aparecerá 1 UAC en este momento (esperado)."
+        ));
+        iobit_log(format!("[INSTALLER-B] PS: {ps_cmd}"));
+
+        let result = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &ps_cmd])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .ok()
+            .map(|mut ps_child| {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
+                loop {
+                    match ps_child.try_wait() {
+                        Ok(Some(status)) => {
+                            let code = status.code().unwrap_or(-1);
+                            iobit_log(format!(
+                                "[INSTALLER-B] PS exited. code={code} success={}",
+                                status.success()
+                            ));
+                            // Inno Setup exit 0 = éxito; cualquier otro = fallo/cancelado.
+                            break status.success();
+                        }
+                        Ok(None) if std::time::Instant::now() >= deadline => {
+                            iobit_log("[INSTALLER-B] timeout 3 min — PS matado");
+                            let _ = ps_child.kill();
+                            break false;
+                        }
+                        Ok(None) => std::thread::sleep(std::time::Duration::from_millis(500)),
+                        Err(e) => {
+                            iobit_log(format!("[INSTALLER-B] try_wait error: {e}"));
+                            break false;
+                        }
+                    }
+                }
+            })
+            .unwrap_or_else(|| {
+                iobit_log("[INSTALLER-B] PowerShell spawn falló");
+                false
+            });
+
+        (result, kind)
+    }
 }
 
 ///
@@ -1820,12 +1892,24 @@ async fn install_iobit_auto(app: tauri::AppHandle) -> Result<IoBitStatus, String
             .unwrap_or(InstallerKind::Unknown)
     };
 
-    // Paso B: instalar en modo completamente silencioso sin ninguna UI
-    prog!(
-        "installing",
-        None,
+    iobit_log(format!("[INSTALL_AUTO] Tipo detectado: {} | path: {:?}", kind.label(), tmp));
+
+    // Paso B: instalar en modo completamente silencioso sin ninguna UI.
+    //
+    // Si el proceso está elevado (producción con requireAdministrator):
+    //   → spawn directo; el instalador hereda el token admin; /VERYSILENT desde el inicio.
+    //
+    // Si el proceso NO está elevado (dev mode / asInvoker):
+    //   → ShellExecuteEx(runas): aparece 1 UAC al pulsar "Instalar"; el proceso elevado
+    //     recibe /VERYSILENT directamente, sin wizard UI.
+    let install_label = if elevated {
         format!("Instalando en silencio ({})...", kind.label())
-    );
+    } else {
+        format!("Instalando {} (se solicitará permiso de administrador)...", kind.label())
+    };
+    prog!("installing", None, install_label);
+    iobit_log(format!("[INSTALL_AUTO] Iniciando run_silent_installer (elevated={elevated})"));
+
     let tmp_clone = tmp.clone();
     let install_ok = tokio::task::spawn_blocking(move || {
         let (ok, _) = run_silent_installer(&tmp_clone);
@@ -1833,6 +1917,8 @@ async fn install_iobit_auto(app: tauri::AppHandle) -> Result<IoBitStatus, String
     })
     .await
     .unwrap_or(false);
+
+    iobit_log(format!("[INSTALL_AUTO] run_silent_installer completado: install_ok={install_ok}"));
 
     let _ = tokio::fs::remove_file(&tmp).await;
 
