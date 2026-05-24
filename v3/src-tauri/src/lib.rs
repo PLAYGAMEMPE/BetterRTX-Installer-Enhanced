@@ -1574,7 +1574,17 @@ fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
                         let _ = child.kill();
                         break false;
                     }
-                    Ok(None) => std::thread::sleep(std::time::Duration::from_millis(500)),
+                    Ok(None) => {
+                        // El [Run] de Inno Setup puede abrir IObit y luego esperar a que el usuario
+                        // lo cierre antes de que el installer salga. Si ya está en el registro,
+                        // confirmamos éxito sin esperar más al proceso del installer.
+                        if get_iobit_unlocker_exe().is_some() {
+                            iobit_log("[INSTALLER-A] IObit detectado en registro mientras el installer sigue corriendo — éxito confirmado");
+                            let _ = child.kill();
+                            break true;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                    }
                     Err(e) => {
                         iobit_log(format!("[INSTALLER-A] try_wait error: {e}"));
                         break false;
@@ -1659,7 +1669,17 @@ fn run_silent_installer(path: &Path) -> (bool, InstallerKind) {
                             let _ = ps_child.kill();
                             break false;
                         }
-                        Ok(None) => std::thread::sleep(std::time::Duration::from_millis(500)),
+                        Ok(None) => {
+                            // El [Run] de Inno Setup puede abrir IObit y luego esperar a que el
+                            // usuario lo cierre antes de que el installer salga, dejando PS bloqueado.
+                            // Detectamos la instalación en el registro para terminar sin esperar más.
+                            if get_iobit_unlocker_exe().is_some() {
+                                iobit_log("[INSTALLER-B] IObit detectado en registro — terminando espera de PS (éxito)");
+                                let _ = ps_child.kill();
+                                break true;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                        }
                         Err(e) => {
                             iobit_log(format!("[INSTALLER-B] try_wait error: {e}"));
                             break false;
@@ -1923,20 +1943,31 @@ async fn install_iobit_auto(app: tauri::AppHandle) -> Result<IoBitStatus, String
     let _ = tokio::fs::remove_file(&tmp).await;
 
     if install_ok {
+        // Cerrar la ventana de IObit que el installer abrió automáticamente via [Run].
+        // El Inno Setup de IObit lanza IObitUnlocker.exe tras la instalación sin flag 'nowait',
+        // lo que hace que el installer (y PowerShell) esperen a que el usuario cierre IObit.
+        // Dado que la instalación fue iniciada por BetterRTX, cerramos esa ventana automáticamente.
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/IM", "IObitUnlocker.exe"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        iobit_log("[INSTALL_AUTO] IObitUnlocker.exe cerrado (auto-lanzado por el installer)");
+
         // Reintentar detección hasta 15 s para dar margen al instalador
         prog!("detecting", None, "Verificando instalación...");
         for _ in 0..5 {
-            std::thread::sleep(std::time::Duration::from_secs(3));
             if let Some(found) = get_iobit_unlocker_exe() {
                 let config_file = brtx_dir().join("iobit_path.txt");
                 let _ = fs::write(&config_file, found.to_string_lossy().as_ref());
                 let version = get_iobit_version(&found).or(installer_version);
+                iobit_log(format!("[INSTALL_AUTO] IObit detectado en {:?} v{:?}", found, version));
                 return Ok(IoBitStatus {
                     installed: true,
                     path: Some(found.to_string_lossy().to_string()),
                     version,
                 });
             }
+            std::thread::sleep(std::time::Duration::from_secs(2));
         }
     }
 
