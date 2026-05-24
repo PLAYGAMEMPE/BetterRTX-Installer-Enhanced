@@ -605,31 +605,94 @@ fn find_launcher_installs(
     installations.extend(new_installations);
 }
 
+/// Detecta instalaciones de Minecraft leyendo el registro de Windows directamente.
+/// ~5 ms vs ~2000-4000 ms del spawn de PowerShell.
+/// Devuelve lista vacía si el registro no tiene las claves esperadas (fallback al PS).
+fn find_minecraft_via_registry() -> Vec<Installation> {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+    let candidates = [
+        (HKEY_CURRENT_USER,  r"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages"),
+        (HKEY_LOCAL_MACHINE, r"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages"),
+    ];
+    let mut found: Vec<Installation> = Vec::new();
+    for (hive, path) in &candidates {
+        let root = match RegKey::predef(*hive).open_subkey_with_flags(path, KEY_READ) {
+            Ok(k) => k,
+            Err(_) => continue,
+        };
+        for name in root.enum_keys().flatten() {
+            let lower = name.to_lowercase();
+            if !lower.starts_with("microsoft.minecraftuwp")
+                && !lower.starts_with("microsoft.minecraftwindowsbeta")
+            {
+                continue;
+            }
+            let pkg = match root.open_subkey_with_flags(&name, KEY_READ) {
+                Ok(k) => k,
+                Err(_) => continue,
+            };
+            let install_path: String = match pkg.get_value("PackageRootFolder") {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            if install_path.is_empty() || lower.contains("java") {
+                continue;
+            }
+            let preview = lower.contains("beta") || lower.contains("preview")
+                || install_path.to_lowercase().contains("beta")
+                || install_path.to_lowercase().contains("preview");
+            let friendly_name = if preview {
+                "Minecraft Preview".to_string()
+            } else {
+                "Minecraft for Windows".to_string()
+            };
+            if !found.iter().any(|i: &Installation| i.install_location == install_path) {
+                found.push(Installation {
+                    friendly_name,
+                    install_location: install_path,
+                    preview,
+                    installed_preset: None,
+                    is_custom: None,
+                });
+            }
+        }
+        if !found.is_empty() {
+            break;
+        }
+    }
+    found
+}
+
 #[tauri::command]
 async fn list_installations(app_handle: tauri::AppHandle) -> Result<Vec<Installation>, String> {
-    let ps = r#"
-    $ErrorActionPreference='Stop';
-    $pkgs = Get-AppxPackage -Name 'Microsoft.Minecraft*' | Where-Object { $_.InstallLocation -notlike '*Java*' };
-    $res = @();
-    foreach ($mc in $pkgs) {
-      $name = (Get-AppxPackageManifest -Package $mc).Package.Properties.DisplayName;
-      $res += [PSCustomObject]@{ FriendlyName=$name; InstallLocation=$mc.InstallLocation; Preview= ($mc.InstallLocation -like '*Beta*' -or $name -like '*Preview*') };
-    }
-    $res | ConvertTo-Json -Depth 3
-    "#;
-    let out = run_powershell_async(app_handle, ps).await?;
-    let out_trim = out.trim();
-    if out_trim.is_empty() { return Ok(vec![]); }
-    
-    let mut installations: Vec<Installation> = {
-        let parsed: Result<Vec<Installation>, _> = serde_json::from_str(out_trim);
-        if let Ok(v) = parsed {
-            v
-        } else {
-            let parsed_single: Result<Installation, _> = serde_json::from_str(out_trim);
-            if let Ok(i) = parsed_single { vec![i] } else { vec![] }
+    // Intento rápido vía registro (~5 ms). Si falla, cae a PowerShell (~2-4 s).
+    let mut installations = find_minecraft_via_registry();
+    if installations.is_empty() {
+        tracing::debug!("Registro no encontró instalaciones, usando PowerShell como fallback");
+        let ps = r#"
+        $ErrorActionPreference='Stop';
+        $pkgs = Get-AppxPackage -Name 'Microsoft.Minecraft*' | Where-Object { $_.InstallLocation -notlike '*Java*' };
+        $res = @();
+        foreach ($mc in $pkgs) {
+          $name = (Get-AppxPackageManifest -Package $mc).Package.Properties.DisplayName;
+          $res += [PSCustomObject]@{ FriendlyName=$name; InstallLocation=$mc.InstallLocation; Preview= ($mc.InstallLocation -like '*Beta*' -or $name -like '*Preview*') };
         }
-    };
+        $res | ConvertTo-Json -Depth 3
+        "#;
+        let out = run_powershell_async(app_handle.clone(), ps).await?;
+        let out_trim = out.trim();
+        if !out_trim.is_empty() {
+            installations = {
+                let parsed: Result<Vec<Installation>, _> = serde_json::from_str(out_trim);
+                if let Ok(v) = parsed {
+                    v
+                } else {
+                    let parsed_single: Result<Installation, _> = serde_json::from_str(out_trim);
+                    if let Ok(i) = parsed_single { vec![i] } else { vec![] }
+                }
+            };
+        }
+    }
 
     find_launcher_installs(
         &mut installations,
@@ -643,13 +706,11 @@ async fn list_installations(app_handle: tauri::AppHandle) -> Result<Vec<Installa
         "LOCALAPPDATA",
         "MCLauncher/installs",
     );
-    
-    // Add installed preset information to each installation
+
     for installation in &mut installations {
         installation.installed_preset = get_installed_preset(&installation.install_location);
     }
 
-    // Merge user-added custom installations (sideloaded, not auto-detected).
     for ci in load_custom_installations() {
         if !installations.iter().any(|i| i.install_location == ci.path) {
             installations.push(Installation {
