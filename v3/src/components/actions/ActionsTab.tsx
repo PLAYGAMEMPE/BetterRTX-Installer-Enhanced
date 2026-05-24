@@ -152,7 +152,7 @@ export default function ActionsTab() {
       <div className="actions-grid flex flex-col">
         <div className="action-btn p-4 rounded-lg border bg-app-panel border-app-border w-full">
           <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col flex-grow-1 w-full">
+            <div className="flex flex-col grow w-full">
               <h3 className="font-semibold mb-2 select-none cursor-default">
                 {t("action_install_dlss_title")}
               </h3>
@@ -171,7 +171,7 @@ export default function ActionsTab() {
         </div>
         <div className="action-btn p-4 rounded-lg border bg-app-panel border-app-border w-full">
           <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col flex-grow-1 w-full">
+            <div className="flex flex-col grow w-full">
               <h3 className="font-semibold mb-2 select-none cursor-default">
                 {t("action_graphics_options_title", "Graphics Options Editor")}
               </h3>
@@ -193,7 +193,7 @@ export default function ActionsTab() {
 
         <div className="action-btn p-4 rounded-lg border bg-app-panel border-app-border w-full">
           <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col flex-grow-1 w-full">
+            <div className="flex flex-col grow w-full">
               <h3 className="font-semibold mb-2 select-none cursor-default">{t("action_backup_title")}</h3>
               <p className="text-sm opacity-75 select-none cursor-default">{t("action_backup_desc")}</p>
             </div>
@@ -210,7 +210,7 @@ export default function ActionsTab() {
         </div>
         <div className="action-btn p-4 rounded-lg border bg-app-panel border-app-border w-full">
           <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col flex-grow-1 w-full">
+            <div className="flex flex-col grow w-full">
               <h3 className="font-semibold mb-2 select-none cursor-default">{t("action_uninstall_title")}</h3>
               <p className="text-sm opacity-75 select-none cursor-default">{t("action_uninstall_desc")}</p>
             </div>
@@ -227,7 +227,7 @@ export default function ActionsTab() {
         </div>
         <div className="action-btn p-4 rounded-lg border bg-app-panel border-app-border w-full">
           <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col flex-grow-1 w-full">
+            <div className="flex flex-col grow w-full">
               <h3 className="font-semibold mb-2 select-none cursor-default">{t("action_register_protocol_title")}</h3>
               <p className="text-sm opacity-75 select-none cursor-default">
                 {t("action_register_protocol_desc")}
@@ -248,7 +248,7 @@ export default function ActionsTab() {
 
         <div className="action-btn p-4 rounded-lg border bg-app-panel border-app-border w-full">
           <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col flex-grow-1 w-full">
+            <div className="flex flex-col grow w-full">
               <h3 className="font-semibold mb-2 select-none cursor-default">{t("action_restore_vanilla_title", "Restore Vanilla Materials")}</h3>
               <p className="text-sm opacity-75 select-none cursor-default">{t("action_restore_vanilla_desc", "Roll back RTX files to their original Minecraft state using the last verified backup.")}</p>
             </div>
