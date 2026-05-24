@@ -171,11 +171,11 @@
 }
 
 @utility max-h-app-tab {
-  @apply max-h-[calc(100vh-6rem)];
+  max-height: calc(100vh - 6rem);
 }
 
 @utility max-h-app-tab-expanded {
-  @apply max-h-[calc(100vh-22rem)];
+  max-height: calc(100vh - 22rem);
 }
 
 @utility rainbow-animate {
@@ -692,10 +692,6 @@
     @apply btn;
   }
 
-  .installation-action-btn {
-    @apply m-0;
-  }
-
   /* Empty state */
   .empty-state {
     @apply panel p-6 text-center text-sm text-app-muted;
@@ -729,7 +725,7 @@
 
   /* Console */
   .console-container {
-    @apply flex flex-col overflow-hidden relative h-min;
+    @apply flex flex-col overflow-hidden relative;
   }
 
   .console-header {
@@ -753,10 +749,11 @@
 
   .console-output {
     @apply font-mono p-4 text-xs h-64 overflow-y-auto whitespace-pre-wrap break-all relative text-app-muted contain-paint scrollbar;
+    font-feature-settings: "liga" 0, "calt" 0;
   }
 
   .console-clear-btn {
-    @apply m-2 self-end button;
+    @apply m-2 self-end button font-sans;
   }
 
   /* Toolbar menu button */
@@ -802,20 +799,6 @@
     @apply fixed right-2 bottom-14 z-40 flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg cursor-pointer select-none;
   }
 
-  /* Console Panel Component */
-  .console-container {
-    @apply flex flex-col overflow-hidden relative;
-  }
-
-  .console-output {
-    @apply font-mono;
-    font-feature-settings: "liga" 0, "calt" 0;
-  }
-
-  .console-clear-btn {
-    @apply font-sans;
-  }
-
   .console-panel--expanded {
     @apply max-h-80;
   }
@@ -831,22 +814,6 @@
   /* Switch Component */
   .switch {
     @apply flex w-fit min-w-min max-w-48;
-  }
-
-  .switch:hover .switch__track .switch__button {
-    @apply rounded-md bg-minecraft-slate-300/50;
-  }
-
-  .switch:hover .switch__track[data-checked] .switch__button {
-    @apply bg-minecraft-slate-200;
-  }
-
-  .switch:hover .switch__handle {
-    @apply border-x-minecraft-slate-700 border-b-minecraft-slate-800;
-  }
-
-  .switch:hover .switch__track[data-checked] {
-    @apply border-minecraft-green-100 bg-minecraft-green-200;
   }
 
   .switch__label {
@@ -867,14 +834,6 @@
 
   .switch__button {
     @apply h-full w-full rounded-sm border-2 border-minecraft-slate-50/75 pt-4 transition duration-200 ease-out cursor-pointer;
-  }
-
-  .switch:hover .switch__track .switch__button {
-    @apply rounded-md bg-minecraft-slate-300/50;
-  }
-
-  .switch:hover .switch__track[data-checked] .switch__button {
-    @apply bg-minecraft-slate-200;
   }
 
   .switch__track {
