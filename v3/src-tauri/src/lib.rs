@@ -38,6 +38,27 @@ struct Installation {
     preview: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     installed_preset: Option<InstalledPreset>,
+    #[serde(rename = "IsCustom", skip_serializing_if = "Option::is_none")]
+    is_custom: Option<bool>,
+}
+
+/// Instalación personalizada añadida manualmente por el usuario.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct CustomInstallation {
+    path: String,
+    name: String,
+}
+
+fn custom_installs_file() -> PathBuf {
+    brtx_dir().join("custom_installations.json")
+}
+
+fn load_custom_installations() -> Vec<CustomInstallation> {
+    read_json_file::<Vec<CustomInstallation>>(&custom_installs_file()).unwrap_or_default()
+}
+
+fn save_custom_installations(list: &Vec<CustomInstallation>) -> Result<(), String> {
+    write_json_file(&custom_installs_file(), list)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -381,6 +402,20 @@ async fn copy_shader_files_async(app_handle: &tauri::AppHandle, install_location
     let mc_dest = Path::new(install_location).join("data").join("renderer").join("materials");
     let sideloaded = is_sideloaded(install_location);
 
+    // Backup automático verificado con SHA256 antes de tocar cualquier archivo.
+    {
+        let install_path = Path::new(install_location);
+        let session_id = chrono::Utc::now().timestamp_millis().to_string();
+        let mechanism_str = if mc_dest.join("materials.index.json").exists() {
+            "indexRedirect"
+        } else {
+            "directOverwrite"
+        };
+        if let Err(e) = app_core::backup::create_backup(install_path, &mc_dest, &session_id, mechanism_str) {
+            tracing::warn!("Backup pre-instalación falló (no fatal): {}", e.message());
+        }
+    }
+
     // For WindowsApps installs, prefer IObit Unlocker; for sideloaded, use direct copy
     // Only use IObit for WindowsApps (non-sideloaded) installations
 
@@ -563,6 +598,7 @@ fn find_launcher_installs(
                 install_location: path.to_str()?.to_string(),
                 preview: false,
                 installed_preset: None,
+                is_custom: None,
             })
         });
 
@@ -612,7 +648,20 @@ async fn list_installations(app_handle: tauri::AppHandle) -> Result<Vec<Installa
     for installation in &mut installations {
         installation.installed_preset = get_installed_preset(&installation.install_location);
     }
-    
+
+    // Merge user-added custom installations (sideloaded, not auto-detected).
+    for ci in load_custom_installations() {
+        if !installations.iter().any(|i| i.install_location == ci.path) {
+            installations.push(Installation {
+                friendly_name: ci.name,
+                install_location: ci.path.clone(),
+                preview: false,
+                installed_preset: get_installed_preset(&ci.path),
+                is_custom: Some(true),
+            });
+        }
+    }
+
     Ok(installations)
 }
 
@@ -2348,6 +2397,46 @@ fn validate_minecraft_path(path: String) -> Result<bool, String> {
     Ok(has_minecraft_indicators || has_materials_structure)
 }
 
+/// Añade una instalación personalizada a la lista persistida.
+/// Valida que la ruta exista y tenga indicadores de Minecraft antes de guardar.
+#[tauri::command]
+fn add_custom_installation(path: String, name: String) -> Result<(), String> {
+    let minecraft_path = Path::new(&path);
+    if !minecraft_path.exists() {
+        return Err("La ruta no existe".into());
+    }
+    let indicators = ["data", "AppxManifest.xml", "Minecraft.exe"];
+    let valid = indicators.iter().any(|&p| minecraft_path.join(p).exists());
+    if !valid {
+        return Err("Ruta de instalación de Minecraft no válida".into());
+    }
+
+    let display_name = if name.trim().is_empty() {
+        minecraft_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Custom Install")
+            .to_string()
+    } else {
+        name.trim().to_string()
+    };
+
+    let mut list = load_custom_installations();
+    if list.iter().any(|c| c.path == path) {
+        return Ok(()); // ya existe, no duplicar
+    }
+    list.push(CustomInstallation { path, name: display_name });
+    save_custom_installations(&list)
+}
+
+/// Elimina una instalación personalizada de la lista persistida.
+#[tauri::command]
+fn remove_custom_installation(path: String) -> Result<(), String> {
+    let mut list = load_custom_installations();
+    list.retain(|c| c.path != path);
+    save_custom_installations(&list)
+}
+
 #[tauri::command]
 fn open_folder_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let result = app
@@ -2870,6 +2959,8 @@ pub fn run() {
             install_uploaded_materials,
             get_brtx_dir,
             validate_minecraft_path,
+            add_custom_installation,
+            remove_custom_installation,
             open_folder_dialog,
             scan_install_capabilities,
             verify_file_integrity,

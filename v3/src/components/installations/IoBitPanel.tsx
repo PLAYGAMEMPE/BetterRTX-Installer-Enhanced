@@ -155,8 +155,8 @@ export default function IoBitPanel() {
                     {t("iobit_path")}
                 </h3>
 
-                <div className="installation-details overflow-hidden items-center p-2">
-                    <div className="iobit-info flex-1">
+                <div className="installation-details overflow-hidden items-start p-2 flex-1">
+                    <div className="iobit-info flex flex-col flex-1 min-w-0 w-full">
                         {/* Status line */}
                         {isFound ? (
                             <div className="flex items-center gap-2 mb-2">
@@ -260,7 +260,7 @@ export default function IoBitPanel() {
                     </div>
                 </div>
 
-                <footer className="installation-footer flex items-center justify-between overflow-auto w-full">
+                <footer className="installation-footer flex items-center justify-between overflow-hidden w-full">
                     <p
                         className="text-xs text-app-muted whitespace-nowrap flex-1 truncate min-w-0 max-w-[calc(100vw-20rem)]"
                         title={iobitPath || t("iobit_help_text")}

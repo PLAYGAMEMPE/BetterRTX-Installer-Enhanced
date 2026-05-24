@@ -8,7 +8,7 @@ export default function Button({
   block = false,
   extra = null,
   ...rest
-}: {
+}: Readonly<{
   children: React.ReactNode;
   theme?: "primary" | "secondary" | "danger" | null;
   size?: "sm" | "md" | "lg" | null;
@@ -16,7 +16,7 @@ export default function Button({
   block?: boolean;
   extra?: string | null;
   [key: string]: any;
-}) {
+}>) {
   return (
     <button
       className={cx(
@@ -24,7 +24,7 @@ export default function Button({
         theme === "primary" && "btn--primary",
         theme === "secondary" && "btn--secondary",
         theme === "danger" && "btn--danger",
-        size === "sm" && "btn--sm",
+        size === "sm" && "btn--small",
         size === "md" && "btn--md",
         size === "lg" && "btn--lg",
         block && "w-full",

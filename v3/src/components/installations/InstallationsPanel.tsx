@@ -1,16 +1,19 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { InstallationCard, Installation } from "./InstallationCard";
 import Button from "../ui/Button";
-import { PlusIcon } from "lucide-react";
+import { useStatusStore } from "../../store/statusStore";
+import BackupsModal from "./BackupsModal";
 
 interface InstallationsPanelProps {
   installations: Installation[];
   selectedInstallations: Set<string>;
   onInstallationSelection: (path: string, selected: boolean) => void;
   onInstallationAdded: () => void;
+  onInstallationRemoved: () => void;
 }
 
 export default function InstallationsPanel({
@@ -18,39 +21,48 @@ export default function InstallationsPanel({
   selectedInstallations,
   onInstallationSelection,
   onInstallationAdded,
-}: InstallationsPanelProps) {
+  onInstallationRemoved,
+}: Readonly<InstallationsPanelProps>) {
   const { t } = useTranslation();
+  const { addMessage } = useStatusStore();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newInstallPath, setNewInstallPath] = useState("");
   const [newInstallName, setNewInstallName] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [backupsInstallation, setBackupsInstallation] = useState<Installation | null>(null);
+
+  const closeDialog = () => {
+    setShowAddDialog(false);
+    setNewInstallPath("");
+    setNewInstallName("");
+  };
 
   const handleAddInstallation = async () => {
     if (!newInstallPath.trim()) return;
 
     setIsAdding(true);
     try {
-      const isValid = await invoke<boolean>("validate_minecraft_path", {
-        path: newInstallPath,
+      await invoke("add_custom_installation", {
+        path: newInstallPath.trim(),
+        name: newInstallName.trim(),
       });
-
-      if (!isValid) {
-        alert("Invalid Minecraft installation path");
-        return;
-      }
-
-      // Trigger refresh of installations list
+      addMessage({ message: t("installation_added_success"), type: "success" });
       onInstallationAdded();
-
-      // Reset form
-      setShowAddDialog(false);
-      setNewInstallPath("");
-      setNewInstallName("");
+      closeDialog();
     } catch (error) {
-      console.error("Error adding installation:", error);
-      alert(`Error adding installation: ${error}`);
+      addMessage({ message: t("error_adding_install", { error: String(error) }), type: "error" });
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  const handleRemoveInstallation = async (path: string) => {
+    try {
+      await invoke("remove_custom_installation", { path });
+      addMessage({ message: t("installation_removed_success"), type: "success" });
+      onInstallationRemoved();
+    } catch (error) {
+      addMessage({ message: t("error_removing_install", { error: String(error) }), type: "error" });
     }
   };
 
@@ -62,7 +74,7 @@ export default function InstallationsPanel({
         title: t("add_installation")
       });
       if (selected) {
-        setNewInstallPath(selected as string);
+        setNewInstallPath(selected);
       }
     } catch (error) {
       console.error("Error opening folder dialog:", error);
@@ -78,15 +90,6 @@ export default function InstallationsPanel({
             {t("installations_found_count", { count: installations.length })}
           </span>
         </div>
-
-        <Button
-          theme="secondary"
-          className="btn size-12"
-          onClick={() => setShowAddDialog(true)}
-          title={t("add_installation")}
-        >
-          <PlusIcon className="size-8 scale-250" />
-        </Button>
       </div>
 
       <div className="installations-list flex flex-wrap gap-4 justify-stretch">
@@ -95,10 +98,10 @@ export default function InstallationsPanel({
             <InstallationCard
               key={installation.InstallLocation}
               installation={installation}
-              selected={selectedInstallations.has(
-                installation.InstallLocation
-              )}
+              selected={selectedInstallations.has(installation.InstallLocation)}
               onSelectionChange={onInstallationSelection}
+              onRemove={installation.IsCustom ? handleRemoveInstallation : undefined}
+              onViewBackups={() => setBackupsInstallation(installation)}
             />
           ))
           : (
@@ -112,33 +115,39 @@ export default function InstallationsPanel({
       </div>
 
       <Button
-        className="btn btn--primary mt-4"
+        theme="primary"
+        block
+        extra="mt-4"
         onClick={() => setShowAddDialog(true)}
       >
         {t("add_installation")}
       </Button>
 
-      {/* Add Installation Dialog */}
-      {showAddDialog && (
-        <div className="dialog-overlay">
-          <div className="dialog">
+      <BackupsModal
+        installation={backupsInstallation}
+        onClose={() => setBackupsInstallation(null)}
+      />
+
+      {/* Diálogo para añadir instalación personalizada */}
+      {showAddDialog && createPortal(
+        <div
+          className="dialog-overlay"
+          style={{
+            left: "16rem",
+            backgroundColor: "transparent",
+          }}
+        >
+          <div className="dialog" style={{ maxHeight: "none", margin: "1.5rem" }}>
             <div className="dialog__header">
               <h2 className="dialog__title">{t("add_custom_installation")}</h2>
-              <button
-                className="dialog__close"
-                onClick={() => {
-                  setShowAddDialog(false);
-                  setNewInstallPath("");
-                  setNewInstallName("");
-                }}
-              >
-                ×
-              </button>
+              <button className="dialog__close" onClick={closeDialog}>×</button>
             </div>
-            <div className="dialog__content">
+            <div className="dialog__content" style={{ flex: "none", overflow: "visible" }}>
               <div className="space-y-4">
                 <div className="field">
-                  <label className="field__label select-none cursor-default">{t("installation_name")}</label>
+                  <label className="field__label select-none cursor-default">
+                    {t("installation_name")}
+                  </label>
                   <input
                     type="text"
                     className="field__input"
@@ -148,7 +157,9 @@ export default function InstallationsPanel({
                   />
                 </div>
                 <div className="field">
-                  <label className="field__label">{t("installation_path")}</label>
+                  <label className="field__label select-none cursor-default">
+                    {t("installation_path")}
+                  </label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -157,7 +168,7 @@ export default function InstallationsPanel({
                       onChange={(e) => setNewInstallPath(e.target.value)}
                       placeholder={t("installation_path_placeholder")}
                     />
-                    <Button className="btn" onClick={handleBrowseFolder}>
+                    <Button theme="secondary" size="sm" onClick={handleBrowseFolder}>
                       {t("browse")}
                     </Button>
                   </div>
@@ -165,18 +176,11 @@ export default function InstallationsPanel({
               </div>
             </div>
             <div className="dialog__actions">
-              <Button
-                className="btn button--ghost"
-                onClick={() => {
-                  setShowAddDialog(false);
-                  setNewInstallPath("");
-                  setNewInstallName("");
-                }}
-              >
+              <Button theme="secondary" onClick={closeDialog}>
                 {t("cancel")}
               </Button>
               <Button
-                className="btn btn--primary"
+                theme="primary"
                 onClick={handleAddInstallation}
                 disabled={!newInstallPath.trim() || isAdding}
               >
@@ -184,7 +188,8 @@ export default function InstallationsPanel({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

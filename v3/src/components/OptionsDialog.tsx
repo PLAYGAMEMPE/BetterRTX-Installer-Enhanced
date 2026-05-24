@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
 import Button from './ui/Button';
@@ -213,8 +214,8 @@ export const OptionsDialog: React.FC<OptionsDialogProps> = ({ isOpen, onClose })
 
   if (!isOpen) return null;
 
-  return (
-    <div className="dialog-overlay">
+  return createPortal(
+    <div className="dialog-overlay" style={{ left: "16rem" }}>
       {/* Modal content */}
       <div className="dialog max-w-2xl">
         {/* Header */}
@@ -380,6 +381,7 @@ export const OptionsDialog: React.FC<OptionsDialogProps> = ({ isOpen, onClose })
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

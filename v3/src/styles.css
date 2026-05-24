@@ -203,7 +203,7 @@
     @apply max-h-app-tab;
   }
 
-  body:has(.dialog-overlay,.console-panel--expanded) .max-h-app-tab {
+  body:has(.console-panel--expanded) .max-h-app-tab {
     @apply max-h-app-tab-expanded;
   }
 }
@@ -267,7 +267,7 @@
     @apply relative w-full max-w-fit mx-auto p-4 h-fit overflow-auto max-h-app-tab scrollbar;
   }
 
-  body:has(.dialog-overlay,.console-panel--expanded) .tab-content {
+  body:has(.console-panel--expanded) .tab-content {
     @apply max-h-app-tab-expanded;
   }
 
@@ -564,6 +564,16 @@
   .creator-badge {
     @apply badge bg-green-600 text-white text-xs;
     border-color: color-mix(in oklab, var(--color-green-600) 70%, black 30%);
+  }
+
+  .community-badge {
+    @apply badge bg-blue-600 text-white text-xs;
+    border-color: color-mix(in oklab, var(--color-blue-600) 70%, black 30%);
+  }
+
+  .custom-badge {
+    @apply badge bg-amber-600 text-white text-xs;
+    border-color: color-mix(in oklab, var(--color-amber-600) 70%, black 30%);
   }
 
   .creator-icon {
@@ -893,16 +903,9 @@
 
   /* Dialog Components */
   .dialog-overlay {
-    @apply fixed inset-0 z-50 flex items-start justify-center bg-black/50 w-full h-full max-h-app-tab;
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50;
   }
 
-  body:has(.dialog-overlay) .app-content {
-    @apply bg-black;
-  }
-
-  body:has(.dialog-overlay,:not(.console-panel--expanded)) .main-content {
-    @apply max-h-app-tab;
-  }
 
   .dialog {
     @apply panel max-w-md w-full mx-4 max-h-app-tab overflow-hidden flex flex-col m-10;

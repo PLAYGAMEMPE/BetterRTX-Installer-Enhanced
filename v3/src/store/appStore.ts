@@ -5,6 +5,7 @@ export interface Installation {
   FriendlyName: string;
   InstallLocation: string;
   Preview: boolean;
+  IsCustom?: boolean;
   installed_preset?: {
     uuid: string;
     name: string;

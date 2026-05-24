@@ -13,14 +13,6 @@ use std::path::Path;
 
 pub const BETTERRTX_SUBDIR: &str = "betterrtx";
 
-/// Nombres de material RTX tal como aparecen como clave en el JSON.
-/// Cada nombre mapea al archivo `.material.bin` del mismo nombre (con extension).
-const RTX_MATERIAL_KEYS: &[&str] = &[
-    "RTXStub",
-    "RTXPostFX.Tonemapping",
-    "RTXPostFX.Bloom",
-];
-
 /// Ejecuta la instalacion via redirect de `materials.index.json`.
 ///
 /// # Pasos
@@ -117,33 +109,17 @@ pub fn is_redirect_active(materials_dir: &Path) -> bool {
 }
 
 /// Modifica el JSON para que las claves RTX apunten a `betterrtx/<archivo>`.
+///
+/// La clave en el JSON coincide con el stem del archivo (sin `.material.bin`).
+/// Si la clave ya existia se actualiza; si no existia se inserta.
 fn patch_index(json: &mut Value, preset_files: &[(&str, &Path)]) {
     let Value::Object(ref mut map) = json else { return };
-
     for (filename, _) in preset_files {
-        // Intentar las claves conocidas: con y sin extension.
-        let key_candidates: Vec<String> = RTX_MATERIAL_KEYS
-            .iter()
-            .chain(std::iter::once(
-                &filename.strip_suffix(".material.bin").unwrap_or(filename),
-            ))
-            .map(|k| k.to_string())
-            .collect();
-
-        let redirect_value = format!("{BETTERRTX_SUBDIR}/{filename}");
-
-        for key in &key_candidates {
-            if map.contains_key(key) {
-                map.insert(key.clone(), Value::String(redirect_value.clone()));
-                break;
-            }
-        }
-
-        // Si la clave no existia, insertarla usando el stem del archivo como clave.
-        let stem = filename.strip_suffix(".material.bin").unwrap_or(filename);
-        if !key_candidates.iter().any(|k| map.contains_key(k)) {
-            map.insert(stem.to_string(), Value::String(redirect_value));
-        }
+        let key = filename.strip_suffix(".material.bin").unwrap_or(filename);
+        map.insert(
+            key.to_string(),
+            Value::String(format!("{BETTERRTX_SUBDIR}/{filename}")),
+        );
     }
 }
 

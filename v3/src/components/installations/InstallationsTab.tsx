@@ -28,6 +28,10 @@ export default function InstallationsTab() {
     await refreshInstallations();
   }, [refreshInstallations]);
 
+  const handleInstallationRemoved = useCallback(async (): Promise<void> => {
+    await refreshInstallations();
+  }, [refreshInstallations]);
+
   return (
     <div className="installations-container">
       <InstallationsPanel
@@ -35,6 +39,7 @@ export default function InstallationsTab() {
         selectedInstallations={selectedInstallations}
         onInstallationSelection={handleInstallationSelection}
         onInstallationAdded={handleInstallationAdded}
+        onInstallationRemoved={handleInstallationRemoved}
       />
       
       <IoBitPanel />

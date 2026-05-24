@@ -29,7 +29,7 @@ function AppHeader({}: AppHeaderProps) {
 
   const handleVersionClick = useCallback(async () => {
     try {
-      await open(`https://github.com/PLAYGAMEMPE/BetterRTX-Installer-Enhanced/releases/tag/v${pkg.version}`);
+      await open(`https://github.com/PLAYGAMEMPE/BetterRTX-Installer-Enhanced`);
     } catch (error) {
       console.error('Failed to open release page:', error);
     }

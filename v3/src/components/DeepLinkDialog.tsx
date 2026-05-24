@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "./ui/Button";
 import { useAppStore } from "../store/appStore";
@@ -89,8 +90,8 @@ export const DeepLinkDialog: React.FC<DeepLinkDialogProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="dialog-overlay">
+  return createPortal(
+    <div className="dialog-overlay" style={{ left: "16rem" }}>
       <div className="dialog">
         <div className="dialog__header">
           <h2 className="dialog__title">
@@ -178,6 +179,7 @@ export const DeepLinkDialog: React.FC<DeepLinkDialogProps> = ({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

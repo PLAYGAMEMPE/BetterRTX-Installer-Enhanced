@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { cx } from "classix";
 import { useTranslation } from "react-i18next";
-import { Lock, AlertTriangle } from "lucide-react";
+import { Lock, AlertTriangle, Trash2, Archive } from "lucide-react";
 import PresetIcon from "../presets/PresetIcon";
 import { checkMigrationNeeded } from "../../ipc/migration";
+import Button from "../ui/Button";
 
 export interface Installation {
   FriendlyName: string;
   InstallLocation: string;
   Preview: boolean;
+  IsCustom?: boolean;
   installed_preset?: {
     uuid: string;
     name: string;
@@ -22,6 +24,8 @@ interface InstallationCardProps {
   installation: Installation;
   selected?: boolean;
   onSelectionChange?: (path: string, selected: boolean) => void;
+  onRemove?: (path: string) => void;
+  onViewBackups?: () => void;
 }
 
 const formatDate = (dateString: string) => {
@@ -51,6 +55,8 @@ export const InstallationCard: React.FC<InstallationCardProps> = ({
   installation,
   selected = false,
   onSelectionChange,
+  onRemove,
+  onViewBackups,
 }) => {
   const { t } = useTranslation();
   const [migrationNeeded, setMigrationNeeded] = useState(false);
@@ -92,6 +98,9 @@ export const InstallationCard: React.FC<InstallationCardProps> = ({
           {installation.Preview && (
             <span className="preview-badge ml-2">Preview</span>
           )}
+          {installation.IsCustom && (
+            <span className="custom-badge ml-2">{t("custom_installation_badge")}</span>
+          )}
           {installation.installed_preset?.is_creator && (
             <span className="creator-badge ml-2">{t("creator_preset")}</span>
           )}
@@ -112,7 +121,7 @@ export const InstallationCard: React.FC<InstallationCardProps> = ({
         <div
           className={cx(
             "installation-details",
-            "overflow-hidden items-center py-2 flex-shrink-1"
+            "overflow-hidden items-center py-2 shrink"
           )}
         >
           {presetIcon || (
@@ -141,10 +150,30 @@ export const InstallationCard: React.FC<InstallationCardProps> = ({
             )}
         </div>
 
-      <footer className="installation-footer flex items-center justify-between overflow-auto w-full">
-        <p className="text-xs text-app-muted whitespace-nowrap flex-1 truncate min-w-0 max-w-[calc(100vw-20rem)]" title={installation.InstallLocation}>
+      <footer className="installation-footer flex items-center justify-between overflow-auto w-full gap-2">
+        <p className="text-xs text-app-muted whitespace-nowrap flex-1 truncate min-w-0" title={installation.InstallLocation}>
           {installation.InstallLocation}
         </p>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            theme="secondary"
+            size="sm"
+            title={t("view_backups")}
+            onClick={(e: React.MouseEvent) => { e.stopPropagation(); onViewBackups?.(); }}
+          >
+            <Archive size={16} />
+          </Button>
+          {onRemove && (
+            <Button
+              theme="danger"
+              size="sm"
+              title={t("remove_installation")}
+              onClick={(e: React.MouseEvent) => { e.stopPropagation(); onRemove(installation.InstallLocation); }}
+            >
+              <Trash2 size={16} />
+            </Button>
+          )}
+        </div>
       </footer>
     </div>
   );
