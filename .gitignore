@@ -19,3 +19,10 @@ log.txt
 # BetterRTX Easy Installer build output
 /logs/
 /dist/
+
+# Scripts locales de conveniencia (no distribuir)
+/1-iniciar-desarrollo.bat
+/2-compilar.bat
+
+# Scripts de setup/build locales para Windows (no distribuir)
+/scripts/
