@@ -23,6 +23,7 @@ adaptativos en Windows, recuperación ante fallos y soporte en español.
 
 - [¿Qué es BetterRTX?](#qué-es-betterrtx)
 - [¿Qué cambia en esta edición?](#qué-cambia-en-esta-edición)
+- [Capturas de pantalla](#capturas-de-pantalla)
 - [Requisitos](#requisitos)
 - [Instalación y uso](#instalación-y-uso)
 - [Compilar desde el código fuente](#compilar-desde-el-código-fuente)
@@ -148,6 +149,18 @@ manualmente** como prerrequisito. Esta edición, cuando el sistema lo necesita:
 
 > Nada de lo anterior elimina funcionalidad del proyecto original: todos los
 > cambios son **aditivos** sobre la base v3 oficial.
+
+---
+
+## Capturas de pantalla
+
+| Instalaciones + gestión de IObit | Presets de la comunidad |
+|---|---|
+| ![Instalaciones](docs/screenshots/instalaciones.png) | ![Presets](docs/screenshots/presets.png) |
+
+| Creador (preset personalizado) | Acciones (capacidades del mod) |
+|---|---|
+| ![Creador](docs/screenshots/creador.png) | ![Acciones](docs/screenshots/acciones.png) |
 
 ---
 

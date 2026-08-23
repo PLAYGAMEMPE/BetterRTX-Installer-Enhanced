@@ -26,3 +26,16 @@ log.txt
 
 # Scripts de setup/build locales para Windows (no distribuir)
 /scripts/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Secretos / config local (nunca deben subirse)
+.env
+.env.*
+*.pat
+*.token

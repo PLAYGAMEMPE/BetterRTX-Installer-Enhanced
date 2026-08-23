@@ -1,6 +1,6 @@
 [package]
 name = "brtx-installer"
-version = "3.1.0"
+version = "1.0.0"
 description = "BetterRTX Installer"
 authors = ["Jason J. Gardner"]
 edition = "2021"
