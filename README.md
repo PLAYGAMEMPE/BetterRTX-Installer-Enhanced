@@ -1,4 +1,4 @@
-# BetterRTX Easy Installer — Edición Comunitaria (PGMPE)
+# BetterRTX Installer Enhanced
 
 ![License](https://img.shields.io/badge/licencia-GPL--3.0-blue)
 ![Platform](https://img.shields.io/badge/plataforma-Windows%2010%20%2F%2011-0078D6?logo=windows&logoColor=white)
@@ -145,10 +145,6 @@ manualmente** como prerrequisito. Esta edición, cuando el sistema lo necesita:
 - **Migración de `bun`/`npm` a `pnpm` v11**, con Node 22 LTS gestionado por
   proyecto (`.npmrc`, `.node-version`) sin afectar la instalación global del
   sistema, y un `preinstall` que bloquea cualquier gestor que no sea `pnpm`.
-- Scripts `.bat` en [`scripts/`](scripts/) que autodetectan e instalan Rust
-  (+MSVC), pnpm, Node 22 LTS y WebView2 Runtime, pensados para una máquina
-  Windows recién formateada, con logging a `logs/` para diagnóstico.
-- CI actualizado (`actions/checkout` y `upload-sarif` a versiones no deprecadas).
 
 > Nada de lo anterior elimina funcionalidad del proyecto original: todos los
 > cambios son **aditivos** sobre la base v3 oficial.
@@ -259,8 +255,9 @@ Este proyecto es un **derivado (fork)** de
 [`BetterRTX/BetterRTX-Installer`](https://github.com/BetterRTX/BetterRTX-Installer),
 creado originalmente por **Jason J. Gardner** ([@jasonjgardner](https://github.com/jasonjgardner))
 y el equipo/comunidad de BetterRTX. La lista completa de autores, colaboradores,
-traductores y playtesters originales se conserva sin modificar en
-[`CREDITS.md`](CREDITS.md).
+traductores y playtesters originales está en el
+[`CREDITS.md`](https://github.com/BetterRTX/BetterRTX-Installer/blob/main/CREDITS.md)
+del repositorio oficial.
 
 Las modificaciones descritas en la sección
 [¿Qué cambia en esta edición?](#qué-cambia-en-esta-edición) son obra de
@@ -293,7 +290,8 @@ documento, que cumple la función de aviso de modificación con fecha relevante
 
 - El código base, la arquitectura original v3 y el diseño de la interfaz
   provienen de `BetterRTX/BetterRTX-Installer` — © sus respectivos autores
-  (ver [`CREDITS.md`](CREDITS.md)).
+  (ver [`CREDITS.md`](https://github.com/BetterRTX/BetterRTX-Installer/blob/main/CREDITS.md)
+  del repositorio oficial).
 - Los módulos, funcionalidades y modificaciones listados en este README como
   propios de esta edición fueron desarrollados por PGMPE sobre esa base, y se
   redistribuyen bajo la misma GPL-3.0, tal como exige la licencia.

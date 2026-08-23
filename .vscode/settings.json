@@ -1,6 +1,0 @@
-{
-    "github.copilot.chat.codeGeneration.useInstructionFiles": true,
-    "css.lint.unknownAtRules": "ignore",
-    "less.lint.unknownAtRules": "ignore",
-    "scss.lint.unknownAtRules": "ignore"
-}
