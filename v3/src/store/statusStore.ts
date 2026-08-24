@@ -12,7 +12,8 @@ export interface StatusMessage {
 interface StatusState {
   messages: StatusMessage[];
   timers: Map<string, NodeJS.Timeout>;
-  addMessage: (message: Omit<StatusMessage, 'id' | 'timestamp'>) => void;
+  /** Devuelve el id del mensaje creado, para poder limpiarlo manualmente (ej. mensajes 'loading' que no tienen auto-dismiss). */
+  addMessage: (message: Omit<StatusMessage, 'id' | 'timestamp'>) => string;
   removeMessage: (id: string) => void;
   clearTimer: (id: string) => void;
 }
@@ -43,6 +44,8 @@ export const useStatusStore = create<StatusState>((set, get) => ({
         return { timers: newTimers };
       });
     }
+
+    return id;
   },
   removeMessage: (id) => {
     const { timers } = get();

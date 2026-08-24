@@ -20,7 +20,7 @@ export const RtpackDialog: React.FC<RtpackDialogProps> = ({
 }) => {
   const { t } = useTranslation();
   const { installations, refreshInstallations } = useAppStore();
-  const { addMessage } = useStatusStore();
+  const { addMessage, removeMessage } = useStatusStore();
   const [selectedInstallations, setSelectedInstallations] = useState<
     Set<string>
   >(new Set());
@@ -55,8 +55,9 @@ export const RtpackDialog: React.FC<RtpackDialogProps> = ({
       return;
     }
     setIsInstalling(true);
+    let loadingMessageId: string | null = null;
     try {
-      addMessage({ message: t("status_installing_rtpack"), type: "loading" });
+      loadingMessageId = addMessage({ message: t("status_installing_rtpack"), type: "loading" });
       await invoke<void>("install_from_rtpack", {
         rtpackPath,
         selectedNames: Array.from(selectedInstallations),
@@ -68,9 +69,12 @@ export const RtpackDialog: React.FC<RtpackDialogProps> = ({
       const errorMsg = t("status_install_error", { error });
       addMessage({ message: errorMsg, type: "error" });
     } finally {
+      if (loadingMessageId) {
+        removeMessage(loadingMessageId);
+      }
       setIsInstalling(false);
     }
-  }, [addMessage, onClose, refreshInstallations, rtpackPath, selectedInstallations, t]);
+  }, [addMessage, removeMessage, onClose, refreshInstallations, rtpackPath, selectedInstallations, t]);
 
   const handleSelectAll = useCallback((): void => {
     if (selectedInstallations.size === installations.length) {

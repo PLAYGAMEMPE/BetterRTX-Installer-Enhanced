@@ -2822,9 +2822,18 @@ async fn install_preset(
     journal.close();
 
     // Verificar integridad post-instalacion (no aplica a la ruta UnlockerProvider).
+    // La ruta del archivo instalado depende del mecanismo: INDEX_REDIRECT copia a
+    // materials_dir/betterrtx/, dejando el original vanilla intacto a proposito;
+    // comparar contra materials_dir/<archivo> en ese caso siempre compararia el
+    // vanilla sin tocar contra el hash del preset, y jamas podria coincidir.
     if plan.provider != "UnlockerProvider" {
         for (filename, src) in &preset_files {
-            let installed = materials_dir.join(filename);
+            let installed = match &plan.mechanism {
+                installer::Mechanism::IndexRedirect => materials_dir
+                    .join(installer::index_redirect::BETTERRTX_SUBDIR)
+                    .join(filename),
+                installer::Mechanism::DirectOverwrite => materials_dir.join(filename),
+            };
             if installed.exists() {
                 if let Ok(src_hash) = app_core::integrity::sha256_file(src) {
                     if let Err(e) = app_core::integrity::verify_file(&installed, &src_hash) {

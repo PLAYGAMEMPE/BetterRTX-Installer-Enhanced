@@ -46,7 +46,7 @@ export const usePresetsStore = create<PresetsStore>((set) => ({
 
   handleInstallToSelected: async (uuid, selectedInstallations, t) => {
     const { addConsoleOutput, refreshInstallations } = useAppStore.getState();
-    const { addMessage } = useStatusStore.getState();
+    const { addMessage, removeMessage } = useStatusStore.getState();
 
     set((state) => ({
       installingPresets: new Set(state.installingPresets).add(uuid),
@@ -68,8 +68,9 @@ export const usePresetsStore = create<PresetsStore>((set) => ({
       },
     });
 
+    let loadingMessageId: string | null = null;
     try {
-      addMessage({ message: t('status_installing_preset'), type: 'loading' });
+      loadingMessageId = addMessage({ message: t('status_installing_preset'), type: 'loading' });
 
       for (const installPath of selectedInstallations) {
         addConsoleOutput(t('log_installing_to', { installPath }));
@@ -85,6 +86,9 @@ export const usePresetsStore = create<PresetsStore>((set) => ({
       addMessage({ message: errorMsg, type: 'error' });
       addConsoleOutput(errorMsg);
     } finally {
+      if (loadingMessageId) {
+        removeMessage(loadingMessageId);
+      }
       unsub();
       set((state) => {
         const next = new Set(state.installingPresets);
