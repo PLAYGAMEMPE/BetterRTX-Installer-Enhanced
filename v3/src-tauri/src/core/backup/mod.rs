@@ -219,7 +219,24 @@ pub fn restore_vanilla(
     Ok(manifest)
 }
 
-#[allow(dead_code)]
+/// Elimina el directorio de un backup especifico (por `session_id`).
+///
+/// No afecta los archivos actuales de la instalacion: solo borra la copia
+/// de seguridad guardada en `.betterrtx-backup/<timestamp>/`.
+pub fn delete_backup(install_location: &Path, session_id: &str) -> Result<(), AppError> {
+    let backups = list_backups(install_location);
+    let entry = backups
+        .iter()
+        .find(|b| b.session_id == session_id)
+        .ok_or_else(|| AppError::Other(format!("Backup con session_id '{session_id}' no encontrado")))?;
+
+    fs::remove_dir_all(&entry.backup_dir)
+        .map_err(|e| AppError::Io(format!("No se pudo eliminar el backup: {e}")))?;
+
+    tracing::info!(backup_dir = %entry.backup_dir, "Backup eliminado");
+    Ok(())
+}
+
 /// Restaura desde un backup especifico (por `session_id`).
 pub fn restore_from_session(
     install_location: &Path,

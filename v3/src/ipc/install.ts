@@ -90,6 +90,19 @@ export async function restoreVanilla(installLocation: string): Promise<BackupMan
   return invoke("restore_vanilla", { installLocation });
 }
 
+/** Restaura la instalacion desde un backup especifico (no necesariamente el mas reciente). */
+export async function restoreBackupSession(
+  installLocation: string,
+  sessionId: string
+): Promise<BackupManifest> {
+  return invoke("restore_backup_session", { installLocation, sessionId });
+}
+
+/** Elimina un backup especifico. No afecta los archivos actuales de la instalacion. */
+export async function deleteBackup(installLocation: string, sessionId: string): Promise<void> {
+  return invoke("delete_backup", { installLocation, sessionId });
+}
+
 // ── Suscripciones a eventos ────────────────────────────────────────────────
 
 /** Escucha el evento de progreso de instalacion. Devuelve la funcion para desuscribirse. */

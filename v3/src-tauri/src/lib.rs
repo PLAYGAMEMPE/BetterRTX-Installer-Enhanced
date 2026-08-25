@@ -2665,6 +2665,27 @@ fn restore_vanilla(install_location: String) -> Result<app_core::backup::BackupM
     app_core::backup::restore_vanilla(&install_path, &materials_dir).map_err(|e| e.message())
 }
 
+/// Restaura la instalacion desde un backup especifico (por `session_id`),
+/// en vez de asumir siempre el mas reciente.
+#[tauri::command]
+fn restore_backup_session(
+    install_location: String,
+    session_id: String,
+) -> Result<app_core::backup::BackupManifest, String> {
+    let install_path = PathBuf::from(&install_location);
+    let materials_dir = install_path.join("data").join("renderer").join("materials");
+    app_core::backup::restore_from_session(&install_path, &materials_dir, &session_id)
+        .map_err(|e| e.message())
+}
+
+/// Elimina un backup especifico (por `session_id`). No toca los archivos
+/// actuales de la instalacion, solo borra la copia de seguridad guardada.
+#[tauri::command]
+fn delete_backup(install_location: String, session_id: String) -> Result<(), String> {
+    let install_path = PathBuf::from(&install_location);
+    app_core::backup::delete_backup(&install_path, &session_id).map_err(|e| e.message())
+}
+
 /// Instala un preset usando el motor hibrido modular con eventos de progreso.
 ///
 /// Eventos emitidos:
@@ -3038,6 +3059,8 @@ pub fn run() {
             install_preset,
             list_backups,
             restore_vanilla,
+            restore_backup_session,
+            delete_backup,
             run_diagnostics,
             check_compatibility,
             check_migration_needed,
