@@ -181,11 +181,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   uninstallRTX: async (installPaths) => {
-    const { addConsoleOutput } = get();
+    const { addConsoleOutput, refreshInstallations } = get();
     try {
       addConsoleOutput(`Uninstalling RTX from ${installPaths.length} installation(s)...`);
       await invoke('uninstall_rtx', { selectedNames: installPaths });
       addConsoleOutput('RTX uninstalled successfully');
+      await refreshInstallations();
     } catch (error) {
       const errorMsg = `Error uninstalling RTX: ${error}`;
       addConsoleOutput(errorMsg);

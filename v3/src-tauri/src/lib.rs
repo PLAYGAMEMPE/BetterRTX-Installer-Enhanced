@@ -782,6 +782,21 @@ fn get_installed_preset(install_location: &str) -> Option<InstalledPreset> {
     None
 }
 
+/// Limpia el tracking de "preset instalado" para una instalacion.
+///
+/// Se usa despues de restaurar un backup o desinstalar: ya no se puede saber
+/// con certeza que preset (si alguno) coincide con el estado actual de los
+/// archivos, asi que es mas seguro no mostrar ninguno que mostrar uno
+/// incorrecto.
+fn clear_installed_preset(install_location: &str) {
+    let presets_file = brtx_dir().join("installed_presets.json");
+    if let Some(mut installations) = read_json_file::<HashMap<String, InstalledPreset>>(&presets_file) {
+        if installations.remove(install_location).is_some() {
+            let _ = write_json_file(&presets_file, &installations);
+        }
+    }
+}
+
 fn save_installed_preset(install_location: &str, preset: &InstalledPreset) -> Result<(), String> {
     let presets_file = brtx_dir().join("installed_presets.json");
     
@@ -2538,51 +2553,67 @@ fn get_iobit_path() -> Result<Option<String>, String> {
     }
 }
 
+/// Desinstala RTX de las instalaciones seleccionadas.
+///
+/// Camino preferido: restaurar desde el backup verificado mas antiguo de esa
+/// instalacion (el capturado antes de aplicar cualquier preset por primera
+/// vez) usando `app_core::backup::restore_vanilla` — revierte correctamente
+/// tanto DIRECT_OVERWRITE como INDEX_REDIRECT (incluye `materials.index.json`,
+/// asi que tambien deshace el redirect, no solo sobrescribe archivos sueltos).
+///
+/// Solo si esa instalacion no tiene ningun backup local (RTX instalado por
+/// fuera de esta app, o backups borrados manualmente) se recurre al camino
+/// viejo: descargar los `.material.bin` originales desde la API publica de
+/// BetterRTX y sobrescribir directo — revirtiendo primero el redirect si
+/// estaba activo, para no dejar `materials.index.json` apuntando a una
+/// carpeta `betterrtx/` que ya no tiene los archivos correctos.
 #[tauri::command]
 async fn uninstall_rtx(app_handle: tauri::AppHandle, selected_names: Vec<String>) -> Result<(), String> {
-    // Download original material.bin files from the uninstall API endpoints
-    let dir = brtx_dir().join("uninstall");
-    ensure_dir(&dir).map_err(|e| e.to_string())?;
-    let client = Client::new();
-    
-    // Download original files with caching
-    let stub_path = dir.join("RTXStub.material.bin");
-    download_to_file_with_cache(&client, "https://bedrock.graphics/api/uninstall/rtxstub", &stub_path).await?;
-    let tone_path = dir.join("RTXPostFX.Tonemapping.material.bin");
-    download_to_file_with_cache(&client, "https://bedrock.graphics/api/uninstall/rtxpostfx", &tone_path).await?;
-    let bloom_path = dir.join("RTXPostFX.Bloom.material.bin");
-    download_to_file_with_cache(&client, "https://bedrock.graphics/api/uninstall/bloom", &bloom_path).await?;
-
-    let materials = vec![
-        stub_path.clone(),
-        tone_path.clone(),
-        bloom_path.clone(),
-    ];
-    
     let all = list_installations(app_handle.clone()).await?;
     let map: std::collections::HashMap<_, _> = all
         .into_iter()
         .map(|i| (i.install_location.clone(), i))
         .collect();
-    
+
     for install_location in selected_names {
         if let Some(ins) = map.get(&install_location) {
-            // Create a dummy pack for uninstall
-            let uninstall_pack = PackInfo {
-                name: "Original Files".to_string(),
-                uuid: "uninstall-original".to_string(),
-                stub: String::new(),
-                tonemapping: String::new(),
-                bloom: String::new(),
-            };
-            copy_shader_files_async(&app_handle, &ins.install_location, &materials, &uninstall_pack).await?;
-            
-            // Remove the installed preset tracking for this installation
-            let presets_file = brtx_dir().join("installed_presets.json");
-            if let Some(mut installations) = read_json_file::<HashMap<String, InstalledPreset>>(&presets_file) {
-                installations.remove(&install_location);
-                let _ = write_json_file(&presets_file, &installations);
+            let install_path = PathBuf::from(&ins.install_location);
+            let materials_dir = install_path.join("data").join("renderer").join("materials");
+
+            let has_local_backup = !app_core::backup::list_backups(&install_path).is_empty();
+
+            if has_local_backup {
+                app_core::backup::restore_vanilla(&install_path, &materials_dir)
+                    .map_err(|e| e.message())?;
+            } else {
+                if app_core::installer::index_redirect::is_redirect_active(&materials_dir) {
+                    app_core::installer::index_redirect::revert(&materials_dir)
+                        .map_err(|e| e.message())?;
+                }
+
+                let dir = brtx_dir().join("uninstall");
+                ensure_dir(&dir).map_err(|e| e.to_string())?;
+                let client = Client::new();
+
+                let stub_path = dir.join("RTXStub.material.bin");
+                download_to_file_with_cache(&client, "https://bedrock.graphics/api/uninstall/rtxstub", &stub_path).await?;
+                let tone_path = dir.join("RTXPostFX.Tonemapping.material.bin");
+                download_to_file_with_cache(&client, "https://bedrock.graphics/api/uninstall/rtxpostfx", &tone_path).await?;
+                let bloom_path = dir.join("RTXPostFX.Bloom.material.bin");
+                download_to_file_with_cache(&client, "https://bedrock.graphics/api/uninstall/bloom", &bloom_path).await?;
+
+                let materials = vec![stub_path, tone_path, bloom_path];
+                let uninstall_pack = PackInfo {
+                    name: "Original Files".to_string(),
+                    uuid: "uninstall-original".to_string(),
+                    stub: String::new(),
+                    tonemapping: String::new(),
+                    bloom: String::new(),
+                };
+                copy_shader_files_async(&app_handle, &ins.install_location, &materials, &uninstall_pack).await?;
             }
+
+            clear_installed_preset(&install_location);
         } else {
             println!("⚠ Skipping unknown selection (no matching installation): {}", install_location);
         }
@@ -2657,16 +2688,20 @@ fn list_backups(install_location: String) -> Vec<app_core::backup::BackupEntry> 
     app_core::backup::list_backups(&PathBuf::from(&install_location))
 }
 
-/// Restaura la instalacion a vanilla desde el backup mas reciente.
+/// Restaura la instalacion a su estado original (el backup mas antiguo,
+/// de antes de aplicar cualquier preset).
 #[tauri::command]
 fn restore_vanilla(install_location: String) -> Result<app_core::backup::BackupManifest, String> {
     let install_path = PathBuf::from(&install_location);
     let materials_dir = install_path.join("data").join("renderer").join("materials");
-    app_core::backup::restore_vanilla(&install_path, &materials_dir).map_err(|e| e.message())
+    let manifest = app_core::backup::restore_vanilla(&install_path, &materials_dir)
+        .map_err(|e| e.message())?;
+    clear_installed_preset(&install_location);
+    Ok(manifest)
 }
 
 /// Restaura la instalacion desde un backup especifico (por `session_id`),
-/// en vez de asumir siempre el mas reciente.
+/// en vez de asumir siempre el mas antiguo.
 #[tauri::command]
 fn restore_backup_session(
     install_location: String,
@@ -2674,8 +2709,10 @@ fn restore_backup_session(
 ) -> Result<app_core::backup::BackupManifest, String> {
     let install_path = PathBuf::from(&install_location);
     let materials_dir = install_path.join("data").join("renderer").join("materials");
-    app_core::backup::restore_from_session(&install_path, &materials_dir, &session_id)
-        .map_err(|e| e.message())
+    let manifest = app_core::backup::restore_from_session(&install_path, &materials_dir, &session_id)
+        .map_err(|e| e.message())?;
+    clear_installed_preset(&install_location);
+    Ok(manifest)
 }
 
 /// Elimina un backup especifico (por `session_id`). No toca los archivos

@@ -72,7 +72,6 @@ pub fn execute(
     Ok(())
 }
 
-#[allow(dead_code)]
 /// Revierte el redirect: restaura el JSON original y elimina `betterrtx/`.
 pub fn revert(materials_dir: &Path) -> Result<(), AppError> {
     let index_path = materials_dir.join("materials.index.json");
@@ -94,7 +93,6 @@ pub fn revert(materials_dir: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
-#[allow(dead_code)]
 /// Detecta si ya hay un redirect activo (betterrtx/ existe Y JSON lo referencia).
 pub fn is_redirect_active(materials_dir: &Path) -> bool {
     let betterrtx_dir = materials_dir.join(BETTERRTX_SUBDIR);

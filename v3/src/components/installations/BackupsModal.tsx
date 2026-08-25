@@ -5,6 +5,7 @@ import { Archive, RotateCcw, Trash2 } from "lucide-react";
 import Button from "../ui/Button";
 import { Installation } from "./InstallationCard";
 import { useStatusStore } from "../../store/statusStore";
+import { useAppStore } from "../../store/appStore";
 import { BackupEntry, listBackups, restoreBackupSession, deleteBackup } from "../../ipc/install";
 
 interface BackupsModalProps {
@@ -50,6 +51,7 @@ export default function BackupsModal({ installation, onClose }: Readonly<Backups
     try {
       await restoreBackupSession(installation.InstallLocation, backup.sessionId);
       addMessage({ message: t("backup_restored_success"), type: "success" });
+      await useAppStore.getState().refreshInstallations();
       onClose();
     } catch (error) {
       addMessage({ message: t("backup_restore_error", { error: String(error) }), type: "error" });
@@ -58,9 +60,15 @@ export default function BackupsModal({ installation, onClose }: Readonly<Backups
     }
   };
 
+  const oldestSessionId = backups.length > 0 ? backups[backups.length - 1].sessionId : null;
+
   const handleDelete = async (backup: BackupEntry) => {
     if (!installation) return;
-    if (!window.confirm(t("backup_delete_confirm"))) return;
+    const isOriginal = backup.sessionId === oldestSessionId;
+    const confirmMsg = isOriginal
+      ? t("backup_delete_confirm_original")
+      : t("backup_delete_confirm");
+    if (!window.confirm(confirmMsg)) return;
     setDeletingId(backup.sessionId);
     try {
       await deleteBackup(installation.InstallLocation, backup.sessionId);
@@ -90,8 +98,11 @@ export default function BackupsModal({ installation, onClose }: Readonly<Backups
         </div>
 
         <div className="dialog__content" style={{ flex: "none", overflow: "visible" }}>
-          <p className="text-sm text-app-muted mb-3 select-none">
+          <p className="text-sm text-app-muted select-none">
             {installation.FriendlyName}
+          </p>
+          <p className="text-xs text-app-muted mb-3 select-none">
+            {t("backups_explainer")}
           </p>
 
           {loading && (
@@ -104,16 +115,28 @@ export default function BackupsModal({ installation, onClose }: Readonly<Backups
 
           {!loading && backups.length > 0 && (
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {backups.map((b) => (
+              {backups.map((b) => {
+                const isOriginal = b.sessionId === oldestSessionId;
+                return (
                 <div
                   key={b.sessionId}
                   className="flex items-center justify-between gap-3 rounded border border-app-border/40 bg-app-surface px-3 py-2"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{formatDate(b.createdAt)}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{formatDate(b.createdAt)}</p>
+                      {isOriginal && (
+                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-emerald-500/20 text-emerald-400">
+                          {t("backup_original_badge")}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-app-muted">
                       {mechanismLabel(b.mechanism)} · {t("backup_files_count", { count: b.fileCount })}
                     </p>
+                    {isOriginal && (
+                      <p className="text-xs text-emerald-400/80">{t("backup_original_hint")}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Button
@@ -148,7 +171,8 @@ export default function BackupsModal({ installation, onClose }: Readonly<Backups
                     </Button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

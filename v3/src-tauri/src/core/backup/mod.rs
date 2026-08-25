@@ -7,6 +7,7 @@
 //! La restauracion a vanilla es la operacion inversa: copia los archivos del
 //! backup de vuelta al directorio de materiales y verifica los hashes.
 
+use crate::app_core::installer::index_redirect;
 use crate::app_core::integrity;
 use crate::infra::error::AppError;
 use chrono::Utc;
@@ -175,25 +176,12 @@ pub fn list_backups(install_location: &Path) -> Vec<BackupEntry> {
     backups
 }
 
-/// Restaura los materiales RTX a su estado vanilla desde el backup mas reciente.
+/// Copia de vuelta los archivos de un manifest y verifica su integridad.
 ///
-/// Verifica los hashes SHA256 despues de restaurar.
-pub fn restore_vanilla(
-    install_location: &Path,
-    materials_dir: &Path,
-) -> Result<BackupManifest, AppError> {
-    let backups = list_backups(install_location);
-    let latest = backups.first().ok_or_else(|| {
-        AppError::Other("No se encontro ningun backup para esta instalacion.".into())
-    })?;
-
-    let backup_dir = PathBuf::from(&latest.backup_dir);
-    let manifest_path = backup_dir.join("manifest.json");
-    let content = fs::read_to_string(&manifest_path)
-        .map_err(|e| AppError::Io(format!("Leer manifest falló: {e}")))?;
-    let manifest: BackupManifest =
-        serde_json::from_str(&content).map_err(|e| AppError::Io(e.to_string()))?;
-
+/// Si el estado restaurado ya no usa INDEX_REDIRECT (el `materials.index.json`
+/// restaurado no apunta a `betterrtx/`), limpia esa carpeta si quedo huerfana
+/// — evita acumular archivos de presets viejos que ya nadie referencia.
+fn apply_manifest(materials_dir: &Path, manifest: &BackupManifest, backup_dir: &Path) -> Result<(), AppError> {
     for backed_file in &manifest.files {
         let src = backup_dir.join(&backed_file.name);
         if !src.exists() {
@@ -206,14 +194,49 @@ pub fn restore_vanilla(
             AppError::Io(format!("Restaurar {} falló: {e}", backed_file.name))
         })?;
 
-        // Verificar integridad post-restauracion.
         integrity::verify_file(&dest, &backed_file.sha256)?;
     }
+
+    if !index_redirect::is_redirect_active(materials_dir) {
+        let betterrtx_dir = materials_dir.join(index_redirect::BETTERRTX_SUBDIR);
+        if betterrtx_dir.exists() {
+            let _ = fs::remove_dir_all(&betterrtx_dir);
+        }
+    }
+
+    Ok(())
+}
+
+/// Restaura los materiales RTX a su estado original: el backup mas **antiguo**
+/// de la instalacion (el primero que se creo, antes de aplicar ningun preset).
+///
+/// Usar el mas reciente aqui seria incorrecto: si ya se instalo mas de un
+/// preset, el backup mas reciente solo captura el estado *antes del ultimo*
+/// install (que puede seguir teniendo otro preset redirigido), no el original
+/// del juego. Para restaurar un snapshot intermedio especifico, usar
+/// `restore_from_session`.
+pub fn restore_vanilla(
+    install_location: &Path,
+    materials_dir: &Path,
+) -> Result<BackupManifest, AppError> {
+    let backups = list_backups(install_location);
+    let original = backups.last().ok_or_else(|| {
+        AppError::Other("No se encontro ningun backup para esta instalacion.".into())
+    })?;
+
+    let backup_dir = PathBuf::from(&original.backup_dir);
+    let manifest_path = backup_dir.join("manifest.json");
+    let content = fs::read_to_string(&manifest_path)
+        .map_err(|e| AppError::Io(format!("Leer manifest falló: {e}")))?;
+    let manifest: BackupManifest =
+        serde_json::from_str(&content).map_err(|e| AppError::Io(e.to_string()))?;
+
+    apply_manifest(materials_dir, &manifest, &backup_dir)?;
 
     tracing::info!(
         backup_dir = %backup_dir.display(),
         files = manifest.files.len(),
-        "Restauracion a vanilla completada"
+        "Restauracion al original completada"
     );
 
     Ok(manifest)
@@ -256,17 +279,7 @@ pub fn restore_from_session(
     let manifest: BackupManifest =
         serde_json::from_str(&content).map_err(|e| AppError::Io(e.to_string()))?;
 
-    for backed_file in &manifest.files {
-        let src = backup_dir.join(&backed_file.name);
-        if !src.exists() {
-            continue;
-        }
-        let dest = materials_dir.join(&backed_file.name);
-        fs::copy(&src, &dest).map_err(|e| {
-            AppError::Io(format!("Restaurar {} falló: {e}", backed_file.name))
-        })?;
-        integrity::verify_file(&dest, &backed_file.sha256)?;
-    }
+    apply_manifest(materials_dir, &manifest, &backup_dir)?;
 
     Ok(manifest)
 }

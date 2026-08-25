@@ -21,6 +21,7 @@ export default function ActionsTab() {
     backupSupportFiles,
     uninstallRTX,
     installations,
+    refreshInstallations,
   } = useAppStore();
   const [isProtocolRegistered, setIsProtocolRegistered] = useState(false);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
@@ -70,6 +71,7 @@ export default function ActionsTab() {
             invoke("restore_vanilla", { installLocation: path })
           ));
           addMessage({ message: t("actions.restore.success", "Vanilla materials restored successfully"), type: "success" });
+          await refreshInstallations();
           break;
       }
       return true;
