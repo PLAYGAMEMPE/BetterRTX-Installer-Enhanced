@@ -35,8 +35,13 @@ impl PermissionProvider for AclProvider {
         let sddl = get_sddl(dir)?;
 
         // 2. Tomar propiedad del directorio (requiere elevacion via UAC).
+        // Cada comando debe checar su propio $LASTEXITCODE y salir si falla —
+        // por defecto PowerShell no propaga el fallo de un exe nativo como su
+        // propio codigo de salida, asi que sin esto `run_elevated` reportaria
+        // exito aunque takeown/icacls hayan fallado (p. ej. sin elevacion real).
         run_elevated(&format!(
-            "takeown /F \"{}\" /D Y /R 2>&1; icacls \"{}\" /grant \"{}:(OI)(CI)F\" /T /C 2>&1",
+            "takeown /F \"{}\" /D Y /R; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}; \
+             icacls \"{}\" /grant \"{}:(OI)(CI)F\" /T /C; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}",
             dir.display(),
             dir.display(),
             current_username(),

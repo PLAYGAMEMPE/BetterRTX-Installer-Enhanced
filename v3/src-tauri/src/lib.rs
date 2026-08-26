@@ -336,7 +336,7 @@ async fn iobit_delete_async(app_handle: &tauri::AppHandle, iobit: &Path, locatio
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        println!("IObit delete reported non-success: {}", stderr);
+        return Err(format!("IObit delete via PowerShell failed: {}", stderr));
     }
 
     println!("IObit single-pass delete completed");
@@ -2837,7 +2837,15 @@ async fn install_preset(
         ("RTXPostFX.Tonemapping.material.bin", tone_path.as_path()),
         ("RTXPostFX.Bloom.material.bin", bloom_path.as_path()),
     ];
-    let install_result: Result<(), infra::error::AppError> = if plan.provider == "UnlockerProvider" {
+    // WindowsApps (Microsoft Store/Xbox) protegido: usar la ruta probada del
+    // proyecto original (IObit Unlocker, con fallback a copia elevada por
+    // PowerShell) en vez del motor nuevo. AclProvider (takeown/icacls) queda
+    // recomendado con alta confianza para este tipo de instalacion, pero su
+    // elevacion silenciosa puede "tener exito" sin haber cambiado nada real,
+    // y ademas nunca invoca IObit — que es justamente lo que el usuario
+    // necesita para desbloquear la carpeta protegida por TrustedInstaller.
+    let use_legacy_copy_path = plan.provider == "UnlockerProvider" || plan.provider == "AclProvider";
+    let install_result: Result<(), infra::error::AppError> = if use_legacy_copy_path {
         // IOBit Unlocker path: delega en la infraestructura existente de copia con unlocker.
         let mats = vec![stub_path.clone(), tone_path.clone(), bloom_path.clone()];
         let dummy = PackInfo {
@@ -2879,12 +2887,14 @@ async fn install_preset(
     }
     journal.close();
 
-    // Verificar integridad post-instalacion (no aplica a la ruta UnlockerProvider).
+    // Verificar integridad post-instalacion (no aplica a la ruta legacy de copia).
     // La ruta del archivo instalado depende del mecanismo: INDEX_REDIRECT copia a
     // materials_dir/betterrtx/, dejando el original vanilla intacto a proposito;
     // comparar contra materials_dir/<archivo> en ese caso siempre compararia el
     // vanilla sin tocar contra el hash del preset, y jamas podria coincidir.
-    if plan.provider != "UnlockerProvider" {
+    // La ruta legacy (copy_shader_files_async) siempre escribe directo en
+    // materials_dir/<archivo>, sin importar lo que diga plan.mechanism.
+    if !use_legacy_copy_path {
         for (filename, src) in &preset_files {
             let installed = match &plan.mechanism {
                 installer::Mechanism::IndexRedirect => materials_dir
