@@ -399,11 +399,22 @@ async fn iobit_copy_async(app_handle: &tauri::AppHandle, iobit: &Path, destinati
 }
 
 async fn copy_shader_files_async(app_handle: &tauri::AppHandle, install_location: &str, materials: &[PathBuf], pack: &PackInfo) -> Result<(), String> {
+    copy_shader_files_async_inner(app_handle, install_location, materials, pack, false).await
+}
+
+/// Igual que [`copy_shader_files_async`] pero permite saltar el backup interno.
+///
+/// Lo usa `install_preset`, que ya crea su propio backup verificado (con
+/// manifest SHA256) antes de llamar aqui — sin `skip_backup` se generaria un
+/// segundo backup casi identico (mismos archivos, unos milisegundos despues)
+/// por cada instalacion, duplicando entradas en el modal de "Copias de
+/// seguridad" sin ninguna ganancia real.
+async fn copy_shader_files_async_inner(app_handle: &tauri::AppHandle, install_location: &str, materials: &[PathBuf], pack: &PackInfo, skip_backup: bool) -> Result<(), String> {
     let mc_dest = Path::new(install_location).join("data").join("renderer").join("materials");
     let sideloaded = is_sideloaded(install_location);
 
     // Backup automático verificado con SHA256 antes de tocar cualquier archivo.
-    {
+    if !skip_backup {
         let install_path = Path::new(install_location);
         let session_id = chrono::Utc::now().timestamp_millis().to_string();
         let mechanism_str = if mc_dest.join("materials.index.json").exists() {
@@ -2855,7 +2866,7 @@ async fn install_preset(
             tonemapping: String::new(),
             bloom: String::new(),
         };
-        copy_shader_files_async(&app, &install_location, &mats, &dummy)
+        copy_shader_files_async_inner(&app, &install_location, &mats, &dummy, true)
             .await
             .map_err(|e| infra::error::AppError::Other(e))
     } else {
