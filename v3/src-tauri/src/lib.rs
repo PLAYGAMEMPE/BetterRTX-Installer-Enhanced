@@ -2820,25 +2820,43 @@ async fn install_preset(
             .map_err(|e| e.message())?;
     log_ev!("info", format!("Backup en: {}", backup_dir.display()));
 
-    // 5. Adquirir permisos.
+    // WindowsApps (Microsoft Store/Xbox) protegido: usar la ruta probada del
+    // proyecto original (IObit Unlocker, con fallback a copia elevada por
+    // PowerShell) en vez del motor nuevo. AclProvider (takeown/icacls) queda
+    // recomendado con alta confianza para este tipo de instalacion, pero
+    // ademas de que su elevacion silenciosa puede "tener exito" sin haber
+    // cambiado nada real, nunca invoca IObit — que es justamente lo que el
+    // usuario necesita para desbloquear la carpeta protegida por
+    // TrustedInstaller. Por eso esta ruta se salta la adquisicion de permisos
+    // de AclProvider por completo (paso 5): IObit y la copia elevada resuelven
+    // sus propios permisos, no dependen de ningun `PermissionGrant`, y si
+    // `acquire()` de AclProvider fallara (p. ej. por el bug de sintaxis de
+    // `takeown /D Y` en ciertas configuraciones) bloquearia la instalacion
+    // entera antes de siquiera intentar el camino que si funciona.
+    let use_legacy_copy_path = plan.provider == "UnlockerProvider" || plan.provider == "AclProvider";
+
+    // 5. Adquirir permisos (solo si la instalacion los va a usar de verdad).
     progress!(5, "Adquiriendo permisos de escritura...");
-    let ctx = permissions::InstallContext {
-        install_location: install_path.clone(),
-        materials_dir: materials_dir.clone(),
-        kind: cap.install_kind,
-        directly_writable: cap.directly_writable,
-    };
     let provider_name = plan.provider.clone();
-    let provider_acq = permissions::provider_by_name(&provider_name)
-        .ok_or_else(|| format!("Provider '{}' no reconocido", provider_name))?;
-    let grant = tokio::task::spawn_blocking({
-        let ctx = ctx.clone();
-        move || provider_acq.acquire(&ctx)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.message())?;
-    log_ev!("info", format!("Permisos adquiridos via {}", grant.provider));
+    let grant: Option<permissions::PermissionGrant> = if use_legacy_copy_path {
+        log_ev!("info", "Ruta legacy (IObit/copia elevada): se omite AclProvider");
+        None
+    } else {
+        let ctx = permissions::InstallContext {
+            install_location: install_path.clone(),
+            materials_dir: materials_dir.clone(),
+            kind: cap.install_kind,
+            directly_writable: cap.directly_writable,
+        };
+        let provider_acq = permissions::provider_by_name(&provider_name)
+            .ok_or_else(|| format!("Provider '{}' no reconocido", provider_name))?;
+        let g = tokio::task::spawn_blocking(move || provider_acq.acquire(&ctx))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.message())?;
+        log_ev!("info", format!("Permisos adquiridos via {}", g.provider));
+        Some(g)
+    };
 
     // 6. Ejecutar instalacion.
     progress!(6, "Instalando archivos del preset...");
@@ -2848,14 +2866,6 @@ async fn install_preset(
         ("RTXPostFX.Tonemapping.material.bin", tone_path.as_path()),
         ("RTXPostFX.Bloom.material.bin", bloom_path.as_path()),
     ];
-    // WindowsApps (Microsoft Store/Xbox) protegido: usar la ruta probada del
-    // proyecto original (IObit Unlocker, con fallback a copia elevada por
-    // PowerShell) en vez del motor nuevo. AclProvider (takeown/icacls) queda
-    // recomendado con alta confianza para este tipo de instalacion, pero su
-    // elevacion silenciosa puede "tener exito" sin haber cambiado nada real,
-    // y ademas nunca invoca IObit — que es justamente lo que el usuario
-    // necesita para desbloquear la carpeta protegida por TrustedInstaller.
-    let use_legacy_copy_path = plan.provider == "UnlockerProvider" || plan.provider == "AclProvider";
     let install_result: Result<(), infra::error::AppError> = if use_legacy_copy_path {
         // IOBit Unlocker path: delega en la infraestructura existente de copia con unlocker.
         let mats = vec![stub_path.clone(), tone_path.clone(), bloom_path.clone()];
@@ -2879,14 +2889,17 @@ async fn install_preset(
         })
     };
 
-    // 7. Liberar permisos (siempre, aunque la instalacion falle).
+    // 7. Liberar permisos (siempre, aunque la instalacion falle) — solo si
+    // el paso 5 los adquirio de verdad.
     progress!(7, "Restaurando permisos originales...");
-    let provider_rel = permissions::provider_by_name(&provider_name).unwrap();
-    if let Err(e) = tokio::task::spawn_blocking(move || provider_rel.release(grant))
-        .await
-        .map_err(|e| e.to_string())?
-    {
-        log_ev!("warn", format!("Advertencia al restaurar permisos: {}", e.message()));
+    if let Some(grant) = grant {
+        let provider_rel = permissions::provider_by_name(&provider_name).unwrap();
+        if let Err(e) = tokio::task::spawn_blocking(move || provider_rel.release(grant))
+            .await
+            .map_err(|e| e.to_string())?
+        {
+            log_ev!("warn", format!("Advertencia al restaurar permisos: {}", e.message()));
+        }
     }
 
     // Propagar error de instalacion.
