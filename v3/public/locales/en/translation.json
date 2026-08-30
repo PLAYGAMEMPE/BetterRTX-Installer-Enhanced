@@ -179,6 +179,8 @@
   "custom_installation_badge": "Custom",
   "remove_installation": "Remove from list",
   "view_backups": "View backups",
+  "open_materials_folder": "Open shaders folder (materials)",
+  "open_materials_folder_error": "Couldn't open the folder: {{error}}",
   "backups_title": "Backups",
   "backups_none_found": "No backups found for this installation",
   "backup_files_count": "{{count}} file(s)",

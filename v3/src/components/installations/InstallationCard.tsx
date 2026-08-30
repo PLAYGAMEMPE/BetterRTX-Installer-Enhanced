@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { cx } from "classix";
 import { useTranslation } from "react-i18next";
-import { Lock, AlertTriangle, Trash2, Archive } from "lucide-react";
+import { Lock, AlertTriangle, Trash2, Archive, FolderOpen } from "lucide-react";
+import { openPath } from "@tauri-apps/plugin-opener";
 import PresetIcon from "../presets/PresetIcon";
 import { checkMigrationNeeded } from "../../ipc/migration";
 import Button from "../ui/Button";
+import { useStatusStore } from "../../store/statusStore";
 
 export interface Installation {
   FriendlyName: string;
@@ -59,6 +61,7 @@ export const InstallationCard: React.FC<InstallationCardProps> = ({
   onViewBackups,
 }) => {
   const { t } = useTranslation();
+  const { addMessage } = useStatusStore();
   const [migrationNeeded, setMigrationNeeded] = useState(false);
 
   useEffect(() => {
@@ -71,6 +74,19 @@ export const InstallationCard: React.FC<InstallationCardProps> = ({
   const handleCardClick = () => {
     const newSelected = !selected;
     onSelectionChange?.(installation.InstallLocation, newSelected);
+  };
+
+  const handleOpenMaterialsFolder = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const materialsDir = `${installation.InstallLocation}\\data\\renderer\\materials`;
+    try {
+      await openPath(materialsDir);
+    } catch (error) {
+      addMessage({
+        message: t("open_materials_folder_error", { error: String(error) }),
+        type: "error",
+      });
+    }
   };
 
   const presetIcon = installation.installed_preset && !installation.installed_preset.is_creator && installation.installed_preset.uuid !== "material-files" ? (
@@ -155,6 +171,14 @@ export const InstallationCard: React.FC<InstallationCardProps> = ({
           {installation.InstallLocation}
         </p>
         <div className="flex items-center gap-2 shrink-0">
+          <Button
+            theme="secondary"
+            size="sm"
+            title={t("open_materials_folder")}
+            onClick={handleOpenMaterialsFolder}
+          >
+            <FolderOpen size={16} />
+          </Button>
           <Button
             theme="secondary"
             size="sm"

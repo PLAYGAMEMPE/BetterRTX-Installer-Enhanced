@@ -1,4 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+// El linker de MSVC (link.exe) imprime una linea informativa normal al crear
+// el .lib/.exp de esta DLL ("Creando biblioteca ... y objeto ..."); Rust la
+// relee como warning por el lint `linker_messages` aunque no indica ningun
+// problema real. Se silencia para no ensuciar el output de cada build.
+#![allow(linker_messages)]
 use chrono::{Local, DateTime, Utc};
 use reqwest::Client;
 use std::fs::{self, File};
@@ -417,12 +422,12 @@ async fn copy_shader_files_async_inner(app_handle: &tauri::AppHandle, install_lo
     if !skip_backup {
         let install_path = Path::new(install_location);
         let session_id = chrono::Utc::now().timestamp_millis().to_string();
-        let mechanism_str = if mc_dest.join("materials.index.json").exists() {
-            "indexRedirect"
-        } else {
-            "directOverwrite"
-        };
-        if let Err(e) = app_core::backup::create_backup(install_path, &mc_dest, &session_id, mechanism_str) {
+        // Esta funcion SIEMPRE sobrescribe los .material.bin directo en
+        // mc_dest (via IObit, copia directa o copia elevada) — nunca toca
+        // materials.index.json ni escribe en una carpeta betterrtx/, asi que
+        // la etiqueta correcta es siempre "directOverwrite", sin importar si
+        // el indice existe o no.
+        if let Err(e) = app_core::backup::create_backup(install_path, &mc_dest, &session_id, "directOverwrite") {
             tracing::warn!("Backup pre-instalación falló (no fatal): {}", e.message());
         }
     }
@@ -1096,6 +1101,9 @@ async fn install_dlss_for_selected(app_handle: tauri::AppHandle, selected_names:
             let src = dir.join("nvngx_dlss.dll");
             if !src.exists() { return Err("DLSS DLL not found".into()); }
             let dest = Path::new(&ins.install_location).join("nvngx_dlss.dll");
+            if let Err(e) = backup_original_once(&dest) {
+                tracing::warn!("Backup de nvngx_dlss.dll fallo (no fatal): {e}");
+            }
             if is_sideloaded(&ins.install_location) {
                 fs::copy(&src, &dest).map_err(|e| e.to_string())?;
             } else if let Some(ioexe) = get_iobit_unlocker_exe() {
@@ -1144,8 +1152,36 @@ async fn install_dlss_for_selected(app_handle: tauri::AppHandle, selected_names:
     Ok(())
 }
 
+/// Respalda un archivo a `<archivo>.original` la primera vez que se toca.
+///
+/// A diferencia del sistema de backups verificados de `core::backup` (pensado
+/// para los `.material.bin` de RTX y mostrado en el modal de "Copias de
+/// seguridad"), esto es una red de seguridad minima para archivos sueltos que
+/// esta app modifica en otros flujos (DLSS, options.txt) y que hasta ahora no
+/// se respaldaban en absoluto. Si `<archivo>.original` ya existe, no se
+/// vuelve a sobrescribir — asi se preserva siempre el primer estado real,
+/// nunca un estado intermedio de una ejecucion anterior de esta misma app.
+fn backup_original_once(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let backup_path = path.with_extension(format!(
+        "{}.original",
+        path.extension().and_then(|e| e.to_str()).unwrap_or("")
+    ));
+    if backup_path.exists() {
+        return Ok(());
+    }
+    fs::copy(path, &backup_path)
+        .map(|_| ())
+        .map_err(|e| format!("No se pudo respaldar {}: {e}", path.display()))
+}
+
 fn update_options_file(path: &Path) -> Result<(), String> {
     if !path.exists() { return Err(format!("Options file not found: {}", path.display())); }
+    if let Err(e) = backup_original_once(path) {
+        tracing::warn!("Backup de options.txt fallo (no fatal): {e}");
+    }
     let mut content = fs::read_to_string(path).map_err(|e| e.to_string())?;
     if content.contains("show_advanced_video_settings:0") {
         content = content.replace("show_advanced_video_settings:0", "show_advanced_video_settings:1");
@@ -2808,18 +2844,6 @@ async fn install_preset(
     download_to_file_with_cache(&client, &preset.bloom, &bloom_path).await?;
     log_ev!("info", "Archivos del preset disponibles en cache local");
 
-    // 4. Backup verificado con manifest SHA256.
-    progress!(4, "Creando backup verificado...");
-    let session_id = chrono::Utc::now().timestamp_millis().to_string();
-    let mechanism_str = match plan.mechanism {
-        installer::Mechanism::IndexRedirect => "indexRedirect",
-        installer::Mechanism::DirectOverwrite => "directOverwrite",
-    };
-    let (backup_dir, _manifest) =
-        backup::create_backup(&install_path, &materials_dir, &session_id, mechanism_str)
-            .map_err(|e| e.message())?;
-    log_ev!("info", format!("Backup en: {}", backup_dir.display()));
-
     // WindowsApps (Microsoft Store/Xbox) protegido: usar la ruta probada del
     // proyecto original (IObit Unlocker, con fallback a copia elevada por
     // PowerShell) en vez del motor nuevo. AclProvider (takeown/icacls) queda
@@ -2834,6 +2858,26 @@ async fn install_preset(
     // `takeown /D Y` en ciertas configuraciones) bloquearia la instalacion
     // entera antes de siquiera intentar el camino que si funciona.
     let use_legacy_copy_path = plan.provider == "UnlockerProvider" || plan.provider == "AclProvider";
+
+    // 4. Backup verificado con manifest SHA256.
+    progress!(4, "Creando backup verificado...");
+    let session_id = chrono::Utc::now().timestamp_millis().to_string();
+    // La ruta legacy (copy_shader_files_async_inner) siempre sobrescribe
+    // directo, sin importar lo que haya calculado plan.mechanism — etiquetar
+    // el backup segun el mecanismo que de verdad se va a ejecutar, no segun
+    // la recomendacion original del planificador.
+    let mechanism_str = if use_legacy_copy_path {
+        "directOverwrite"
+    } else {
+        match plan.mechanism {
+            installer::Mechanism::IndexRedirect => "indexRedirect",
+            installer::Mechanism::DirectOverwrite => "directOverwrite",
+        }
+    };
+    let (backup_dir, _manifest) =
+        backup::create_backup(&install_path, &materials_dir, &session_id, mechanism_str)
+            .map_err(|e| e.message())?;
+    log_ev!("info", format!("Backup en: {}", backup_dir.display()));
 
     // 5. Adquirir permisos (solo si la instalacion los va a usar de verdad).
     progress!(5, "Adquiriendo permisos de escritura...");

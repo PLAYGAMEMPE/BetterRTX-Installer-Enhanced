@@ -179,6 +179,8 @@
   "custom_installation_badge": "Personalizada",
   "remove_installation": "Quitar de la lista",
   "view_backups": "Ver copias de seguridad",
+  "open_materials_folder": "Abrir carpeta de shaders (materials)",
+  "open_materials_folder_error": "No se pudo abrir la carpeta: {{error}}",
   "backups_title": "Copias de seguridad",
   "backups_none_found": "No hay copias de seguridad para esta instalación",
   "backup_files_count": "{{count}} archivo(s)",
