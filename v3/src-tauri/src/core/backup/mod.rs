@@ -60,15 +60,36 @@ pub struct BackupEntry {
     pub file_count: usize,
 }
 
-/// Crea un backup de los materiales RTX actuales en la instalacion.
+/// Crea un backup de los materiales RTX actuales en la instalacion — pero
+/// solo si todavia no existe ninguno para esa instalacion.
 ///
-/// Devuelve la ruta del directorio de backup creado y el manifest generado.
+/// Si ya hay al menos un backup (de una instalacion anterior), no se crea
+/// uno nuevo: se devuelve el mas antiguo que ya existe, sin tocar el disco.
+/// Asi se evita acumular una copia por cada preset instalado — el backup
+/// mas antiguo ya es la unica garantia real de "estado original del juego"
+/// que importa; los intermedios solo ocupaban espacio sin agregar nada.
+///
+/// Devuelve la ruta del directorio de backup (nuevo o existente) y su manifest.
 pub fn create_backup(
     install_location: &Path,
     materials_dir: &Path,
     session_id: &str,
     mechanism: &str,
 ) -> Result<(PathBuf, BackupManifest), AppError> {
+    if let Some(existing) = list_backups(install_location).into_iter().last() {
+        let backup_dir = PathBuf::from(&existing.backup_dir);
+        let manifest_path = backup_dir.join("manifest.json");
+        let content = fs::read_to_string(&manifest_path)
+            .map_err(|e| AppError::Io(format!("Leer manifest existente falló: {e}")))?;
+        let manifest: BackupManifest =
+            serde_json::from_str(&content).map_err(|e| AppError::Io(e.to_string()))?;
+        tracing::info!(
+            backup_dir = %backup_dir.display(),
+            "Ya existe un backup para esta instalacion, se reutiliza (no se crea uno nuevo)"
+        );
+        return Ok((backup_dir, manifest));
+    }
+
     let backup_root = install_location.join(BACKUP_DIR_NAME);
     let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
     let backup_dir = backup_root.join(&timestamp);
