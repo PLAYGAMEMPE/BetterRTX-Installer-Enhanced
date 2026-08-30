@@ -1177,6 +1177,31 @@ fn backup_original_once(path: &Path) -> Result<(), String> {
         .map_err(|e| format!("No se pudo respaldar {}: {e}", path.display()))
 }
 
+/// Devuelve la ruta de backup que usaria `backup_original_once` para `path`,
+/// sin tocar nada — para saber si existe un `.original` que restaurar.
+fn original_backup_path(path: &Path) -> PathBuf {
+    path.with_extension(format!(
+        "{}.original",
+        path.extension().and_then(|e| e.to_str()).unwrap_or("")
+    ))
+}
+
+/// Restaura `<archivo>.original` de vuelta a `archivo`, si el backup existe.
+///
+/// Complemento de `backup_original_once`. Devuelve `Ok(true)` si de verdad
+/// restauro algo, `Ok(false)` si no habia backup (nada que hacer, no es un
+/// error). El backup no se borra despues de restaurar, por si se necesita de
+/// nuevo.
+fn restore_original_if_backed_up(path: &Path) -> Result<bool, String> {
+    let backup_path = original_backup_path(path);
+    if !backup_path.exists() {
+        return Ok(false);
+    }
+    fs::copy(&backup_path, path)
+        .map(|_| true)
+        .map_err(|e| format!("No se pudo restaurar {}: {e}", path.display()))
+}
+
 fn update_options_file(path: &Path) -> Result<(), String> {
     if !path.exists() { return Err(format!("Options file not found: {}", path.display())); }
     if let Err(e) = backup_original_once(path) {
@@ -1189,6 +1214,38 @@ fn update_options_file(path: &Path) -> Result<(), String> {
         content.push_str("\nshow_advanced_video_settings:1");
     }
     fs::write(path, content).map_err(|e| e.to_string())
+}
+
+/// Restaura DLSS y `options.txt` a como estaban antes de que esta app los
+/// tocara por primera vez, para una instalacion concreta.
+///
+/// Complementa la restauracion de materiales RTX (que ya tiene su propio
+/// sistema de backup verificado): esta funcion cubre los otros dos archivos
+/// que BetterRTX modifica fuera de la carpeta de materiales. Best-effort — si
+/// algo falla se registra en el log pero no aborta la operacion completa
+/// (ya se pudo haber restaurado lo mas importante, los materiales RTX).
+async fn restore_dlss_and_options_for_install(app_handle: &tauri::AppHandle, install_location: &str) {
+    let dlss_dest = Path::new(install_location).join("nvngx_dlss.dll");
+    match restore_original_if_backed_up(&dlss_dest) {
+        Ok(true) => tracing::info!("DLSS restaurado a su original: {}", dlss_dest.display()),
+        Ok(false) => {}
+        Err(e) => tracing::warn!("No se pudo restaurar DLSS (no fatal): {e}"),
+    }
+
+    if let Ok(all) = list_installations(app_handle.clone()).await {
+        if let Some(ins) = all.iter().find(|i| i.install_location == install_location) {
+            let options_path = if ins.preview {
+                local_app_data().join(r"Packages\Microsoft.MinecraftPreview_8wekyb3d8bbwe\LocalState\games\com.mojang\minecraftpe\options.txt")
+            } else {
+                local_app_data().join(r"Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState\games\com.mojang\minecraftpe\options.txt")
+            };
+            match restore_original_if_backed_up(&options_path) {
+                Ok(true) => tracing::info!("options.txt restaurado a su original: {}", options_path.display()),
+                Ok(false) => {}
+                Err(e) => tracing::warn!("No se pudo restaurar options.txt (no fatal): {e}"),
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -2660,6 +2717,7 @@ async fn uninstall_rtx(app_handle: tauri::AppHandle, selected_names: Vec<String>
                 copy_shader_files_async(&app_handle, &ins.install_location, &materials, &uninstall_pack).await?;
             }
 
+            restore_dlss_and_options_for_install(&app_handle, &install_location).await;
             clear_installed_preset(&install_location);
         } else {
             println!("⚠ Skipping unknown selection (no matching installation): {}", install_location);
@@ -2735,29 +2793,48 @@ fn list_backups(install_location: String) -> Vec<app_core::backup::BackupEntry> 
     app_core::backup::list_backups(&PathBuf::from(&install_location))
 }
 
-/// Restaura la instalacion a su estado original (el backup mas antiguo,
-/// de antes de aplicar cualquier preset).
+/// Restaura la instalacion a su estado original: materiales RTX (el backup
+/// mas antiguo, de antes de aplicar cualquier preset), DLSS y `options.txt`
+/// — todo lo que BetterRTX puede llegar a modificar en una instalacion.
 #[tauri::command]
-fn restore_vanilla(install_location: String) -> Result<app_core::backup::BackupManifest, String> {
+async fn restore_vanilla(app_handle: tauri::AppHandle, install_location: String) -> Result<app_core::backup::BackupManifest, String> {
     let install_path = PathBuf::from(&install_location);
     let materials_dir = install_path.join("data").join("renderer").join("materials");
     let manifest = app_core::backup::restore_vanilla(&install_path, &materials_dir)
         .map_err(|e| e.message())?;
+    restore_dlss_and_options_for_install(&app_handle, &install_location).await;
     clear_installed_preset(&install_location);
     Ok(manifest)
 }
 
 /// Restaura la instalacion desde un backup especifico (por `session_id`),
 /// en vez de asumir siempre el mas antiguo.
+///
+/// Si el `session_id` elegido resulta ser el backup mas antiguo (el marcado
+/// como "Original" en el modal de Copias de seguridad), tambien se restauran
+/// DLSS y `options.txt` — esa entrada representa el mismo "volver al estado
+/// original" que `restore_vanilla`, asi que debe comportarse igual.
 #[tauri::command]
-fn restore_backup_session(
+async fn restore_backup_session(
+    app_handle: tauri::AppHandle,
     install_location: String,
     session_id: String,
 ) -> Result<app_core::backup::BackupManifest, String> {
     let install_path = PathBuf::from(&install_location);
     let materials_dir = install_path.join("data").join("renderer").join("materials");
+
+    let is_original = app_core::backup::list_backups(&install_path)
+        .last()
+        .map(|oldest| oldest.session_id == session_id)
+        .unwrap_or(false);
+
     let manifest = app_core::backup::restore_from_session(&install_path, &materials_dir, &session_id)
         .map_err(|e| e.message())?;
+
+    if is_original {
+        restore_dlss_and_options_for_install(&app_handle, &install_location).await;
+    }
+
     clear_installed_preset(&install_location);
     Ok(manifest)
 }

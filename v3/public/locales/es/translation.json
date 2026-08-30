@@ -202,7 +202,7 @@
   "disclaimer_text": "BetterRTX no está afiliado, aprobado ni respaldado por IObit, NVIDIA, Mojang ni Microsoft. El equipo de BetterRTX no es responsable de los problemas causados por sus dependencias. Modificar el juego requiere ciertos conocimientos técnicos y puede causar problemas en el juego o el sistema. Úsalo bajo tu propia responsabilidad.",
 
   "action_restore_vanilla_title": "Restaurar materiales originales",
-  "action_restore_vanilla_desc": "Revertir los archivos RTX a su estado 100% original de Minecraft, usando la copia de seguridad más antigua verificada (de antes de instalar cualquier preset).",
+  "action_restore_vanilla_desc": "Revertir todo lo que BetterRTX pudo haber modificado (materiales RTX, DLSS y options.txt) a su estado 100% original, usando la copia de seguridad más antigua verificada (de antes de instalar cualquier preset).",
   "restore": "Restaurar",
   "restore_to_selected": "Restaurar en seleccionadas ({{count}})",
   "restoring": "Restaurando...",

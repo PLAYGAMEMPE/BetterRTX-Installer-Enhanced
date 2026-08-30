@@ -250,7 +250,7 @@
   "diag_possibly_brtx": "Possibly BetterRTX related",
 
   "action_restore_vanilla_title": "Restore Vanilla Materials",
-  "action_restore_vanilla_desc": "Roll back RTX files to their 100% original Minecraft state, using the oldest verified backup (from before any preset was installed).",
+  "action_restore_vanilla_desc": "Roll back everything BetterRTX may have changed (RTX materials, DLSS, and options.txt) to its 100% original state, using the oldest verified backup (from before any preset was installed).",
   "restore": "Restore",
   "restore_to_selected": "Restore selected ({{count}})",
   "restoring": "Restoring...",
